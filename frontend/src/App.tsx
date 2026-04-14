@@ -16,7 +16,7 @@ function App() {
           <img src={viteLogo} className="vite" alt="Vite logo" />
         </div>
         <div>
-          <h1>RateMyClass @ Oxy</h1>
+          <h1 className="text-4xl font-bold text-orange-600">RateMyClass @ Oxy</h1>
           <p>
             Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
           </p>
