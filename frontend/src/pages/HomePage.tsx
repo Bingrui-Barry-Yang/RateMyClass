@@ -4,11 +4,11 @@ import { mockCourses } from '../data/mockCourses'
 
 function HomePage() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-b from-white to-orange-50">
       <Navbar />
       
       {/* Hero Section */}
-      <section className="bg-gradient-to-b from-white to-orange-50 py-20 px-6">
+      <section className="py-20 px-6">
         {/* 标题+简介 */}
         <div className="max-w-4xl mx-auto text-center">
           <h1 className="text-5xl font-bold text-gray-900 mb-6">
@@ -51,7 +51,33 @@ function HomePage() {
               <CourseCard key={course.id} course={course} />
             ))}
           </div>
+        </div>
+      </section>
 
+      {/* Stats Section */}
+      <section className="py-16 px-4 border-t border-gray-200">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+            
+            {/* Stat 1: Courses */}
+            <div>
+              <h3 className="text-5xl font-bold text-orange-600 mb-2">500+</h3>
+              <p className="text-gray-600">Courses Reviewed</p>
+            </div>
+            
+            {/* Stat 2: Reviews */}
+            <div>
+              <h3 className="text-5xl font-bold text-orange-600 mb-2">1200+</h3>
+              <p className="text-gray-600">Student Reviews</p>
+            </div>
+            
+            {/* Stat 3: Students */}
+            <div>
+              <h3 className="text-5xl font-bold text-orange-600 mb-2">800+</h3>
+              <p className="text-gray-600">Active Students</p>
+            </div>
+            
+          </div>
         </div>
       </section>
       
