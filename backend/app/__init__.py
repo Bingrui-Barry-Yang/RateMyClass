@@ -1,1 +1,0 @@
-"""RateMyClass backend package."""
