@@ -24,6 +24,7 @@ from oxy_scraper.parse import (
     ListRow,
     detail_crn,
     detail_description,
+    detail_group,
     hidden_fields,
     parse_list,
     select_options,
@@ -161,14 +162,10 @@ class Fetcher:
         for term in sorted(set(terms), reverse=True):
             groups: dict[tuple[str, ...], list[tuple[str, ListRow]]] = {}
             for subject, row in self._cached_rows(term):
-                dept, number = row.dept or "", row.number or ""
-                title = " ".join(row.title.lower().split())
-                if row.is_dash_lab:
-                    key: tuple[str, ...] = (dept, number, title, "lab")
-                elif (dept, number) in topics:
-                    key = (row.crn,)
+                if (row.dept or "", row.number or "") in topics and not row.is_dash_lab:
+                    key: tuple[str, ...] = (row.crn,)
                 else:
-                    key = (dept, number, title)
+                    key = detail_group(row)
                 groups.setdefault(key, []).append((subject, row))
             for members in groups.values():
                 if any(self.store.detail_path(term, r.crn).exists() for _, r in members):

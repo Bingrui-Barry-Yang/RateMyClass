@@ -81,8 +81,9 @@ format: ## Auto-format backend, scraper and frontend code
 	$(SCRAPER) uv run ruff check --fix . && uv run ruff format .
 	$(FRONTEND) npm run format
 
-scrape: ## Download counts.oxy.edu into data/raw (cached): make scrape [terms=202602,202603] [refresh=1]
+scrape: ## Download counts.oxy.edu into data/raw (cached) and parse it: make scrape [terms=202602,202603] [refresh=1]
 	$(SCRAPER) uv run python -m oxy_scraper fetch $(if $(terms),--terms $(terms)) $(if $(refresh),--refresh)
+	$(SCRAPER) uv run python -m oxy_scraper parse $(if $(terms),--terms $(terms))
 
 build: ## Production build of the frontend
 	$(FRONTEND) npm run build

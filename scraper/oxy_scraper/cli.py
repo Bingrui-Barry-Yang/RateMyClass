@@ -8,6 +8,7 @@ from oxy_scraper import paths
 from oxy_scraper.client import CountsClient
 from oxy_scraper.exclusions import load_exclusions
 from oxy_scraper.fetch import AbortRun, Fetcher
+from oxy_scraper.parsed import parse_terms
 from oxy_scraper.store import RawStore
 
 log = logging.getLogger("oxy_scraper")
@@ -36,7 +37,31 @@ def build_parser() -> argparse.ArgumentParser:
     fetch.add_argument(
         "--dry-run", action="store_true", help="fetch lists, then only report pending details"
     )
+    parse = commands.add_parser(
+        "parse", help="turn data/raw into data/parsed/<term>.json (offline)"
+    )
+    parse.add_argument(
+        "--terms", help="comma-separated term codes (default: every term in data/raw)"
+    )
     return parser
+
+
+def run_parse(args: argparse.Namespace) -> int:
+    store = RawStore(paths.RAW_DIR)
+    cached = store.cached_terms()
+    chosen = args.terms.split(",") if args.terms else cached
+    unknown = [t for t in chosen if t not in cached]
+    if unknown:
+        log.error("no raw data for term(s): %s (run fetch first)", ", ".join(unknown))
+        return 2
+    summaries = parse_terms(store, paths.PARSED_DIR, chosen)
+    log.info(
+        "done: %d terms, %d sections -> %s",
+        len(summaries),
+        sum(s.sections for s in summaries),
+        paths.PARSED_DIR,
+    )
+    return 0
 
 
 def run_fetch(args: argparse.Namespace) -> int:
@@ -74,5 +99,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per request is too noisy
     if args.command == "fetch":
         return run_fetch(args)
+    if args.command == "parse":
+        return run_parse(args)
     parser.print_help()
     return 0

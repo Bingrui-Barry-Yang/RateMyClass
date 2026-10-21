@@ -62,7 +62,8 @@ Rules of thumb:
 scraper/oxy_scraper/
 ├── client.py      CountsClient: WebForms postbacks, >=1 s between requests, retry/backoff
 ├── fetch.py       Step 1: list + detail pages -> data/raw (cached, resumable)
-├── parse.py       HTML -> rows (pure functions, tested against saved fixtures)
+├── parsed.py      Step 2: data/raw -> data/parsed/<term>.json (offline)
+├── parse.py       HTML -> rows and details (pure functions, tested against saved fixtures)
 ├── store.py       data/raw layout (gzip HTML + meta.json per term)
 ├── exclusions.py  Listings that never become courses (scraper/overrides/exclusions.csv)
 └── cli.py         python -m oxy_scraper <command>
@@ -75,8 +76,13 @@ Detail popups are fetched once per term per (dept, number, title), so descriptio
 kept; for topic courses ("Special Topics"/"Topics in" titles, or "Topics vary" in a
 description) every section in every term is fetched. Labs listed under a lecture ("COMP 131 1-1")
 are grouped by their own title, because some departments give them their own description. The
-fetcher stops after 5 failures in a
-row; rerunning resumes where it stopped.
+fetcher stops after 5 failures in a row; rerunning resumes where it stopped.
+
+The parse step writes one JSON file per term: every listed row as shown (instructors with full
+names, meetings, core, seats) plus the parsed popups keyed by CRN (description, restrictions,
+prerequisites, corequisites, reserved seats). Each section's `detail_crn` names the popup that
+describes it; `detail_shared` is true when that popup was fetched for another section of the
+same course. Popups contain no rooms and no textbook list.
 
 ## Frontend
 
