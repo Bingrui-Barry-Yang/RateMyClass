@@ -8,9 +8,11 @@ export
 
 BACKEND  := cd backend &&
 FRONTEND := cd frontend &&
+SCRAPER  := cd scraper &&
 
 .PHONY: help setup env db-up db-down db-reset dev dev-backend dev-frontend migrate migration \
-        gen-api test test-backend test-frontend lint lint-backend lint-frontend format build
+        gen-api test test-backend test-scraper test-frontend lint lint-backend lint-scraper \
+        lint-frontend format build
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -18,8 +20,8 @@ help: ## Show this help
 env: ## Create .env from .env.example if missing
 	@test -f .env || (cp .env.example .env && echo "created .env from .env.example")
 
-setup: env ## Install backend and frontend dependencies from lockfiles
-	$(BACKEND) uv sync --locked
+setup: env ## Install Python (uv workspace) and frontend dependencies from lockfiles
+	uv sync --locked --all-packages
 	$(FRONTEND) npm ci
 
 db-up: env ## Start local Postgres and wait until it is healthy
@@ -52,24 +54,31 @@ gen-api: ## Regenerate frontend API types from the backend OpenAPI schema
 	$(BACKEND) uv run python -m scripts.export_openapi ../openapi.json
 	$(FRONTEND) npm run gen-api
 
-test: test-backend test-frontend ## Run all tests
+test: test-backend test-scraper test-frontend ## Run all tests
 
 test-backend:
 	$(BACKEND) uv run pytest
 
+test-scraper:
+	$(SCRAPER) uv run pytest
+
 test-frontend:
 	$(FRONTEND) npm test
 
-lint: lint-backend lint-frontend ## Lint, format-check and type-check everything
+lint: lint-backend lint-scraper lint-frontend ## Lint, format-check and type-check everything
 
 lint-backend:
 	$(BACKEND) uv run ruff check . && uv run ruff format --check . && uv run mypy app tests scripts
 
+lint-scraper:
+	$(SCRAPER) uv run ruff check . && uv run ruff format --check . && uv run mypy oxy_scraper tests
+
 lint-frontend:
 	$(FRONTEND) npm run lint && npm run typecheck
 
-format: ## Auto-format backend and frontend code
+format: ## Auto-format backend, scraper and frontend code
 	$(BACKEND) uv run ruff check --fix . && uv run ruff format .
+	$(SCRAPER) uv run ruff check --fix . && uv run ruff format .
 	$(FRONTEND) npm run format
 
 build: ## Production build of the frontend
