@@ -12,7 +12,7 @@ SCRAPER  := cd scraper &&
 
 .PHONY: help setup env db-up db-down db-reset dev dev-backend dev-frontend migrate migration \
         gen-api test test-backend test-scraper test-frontend lint lint-backend lint-scraper \
-        lint-frontend format build
+        lint-frontend format build scrape
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -80,6 +80,9 @@ format: ## Auto-format backend, scraper and frontend code
 	$(BACKEND) uv run ruff check --fix . && uv run ruff format .
 	$(SCRAPER) uv run ruff check --fix . && uv run ruff format .
 	$(FRONTEND) npm run format
+
+scrape: ## Download counts.oxy.edu into data/raw (cached): make scrape [terms=202602,202603] [refresh=1]
+	$(SCRAPER) uv run python -m oxy_scraper fetch $(if $(terms),--terms $(terms)) $(if $(refresh),--refresh)
 
 build: ## Production build of the frontend
 	$(FRONTEND) npm run build

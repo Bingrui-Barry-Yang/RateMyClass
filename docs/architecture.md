@@ -56,6 +56,28 @@ Rules of thumb:
   generated file.
 - Sync SQLAlchemy with psycopg 3. That is plenty for a few thousand users and keeps the code simple.
 
+## Scraper
+
+```
+scraper/oxy_scraper/
+├── client.py      CountsClient: WebForms postbacks, >=1 s between requests, retry/backoff
+├── fetch.py       Step 1: list + detail pages -> data/raw (cached, resumable)
+├── parse.py       HTML -> rows (pure functions, tested against saved fixtures)
+├── store.py       data/raw layout (gzip HTML + meta.json per term)
+├── exclusions.py  Listings that never become courses (scraper/overrides/exclusions.csv)
+└── cli.py         python -m oxy_scraper <command>
+```
+
+counts.oxy.edu is an ASP.NET WebForms page that keeps its state in `__VIEWSTATE`, so a saved
+page can be replayed later to post back from it. The fetcher asks for one subject at a time, and
+only for subjects in that term's own dropdown (empty subjects make the server return HTTP 500).
+Detail popups are fetched once per term per (dept, number, title), so description changes are
+kept; for topic courses ("Special Topics"/"Topics in" titles, or "Topics vary" in a
+description) every section in every term is fetched. Labs listed under a lecture ("COMP 131 1-1")
+are grouped by their own title, because some departments give them their own description. The
+fetcher stops after 5 failures in a
+row; rerunning resumes where it stopped.
+
 ## Frontend
 
 ```

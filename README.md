@@ -47,6 +47,7 @@ Run `make help` for the full list.
 | `make lint` | Lint, format check and type check (ruff, mypy, oxlint, prettier, tsc) |
 | `make format` | Auto-format all code |
 | `make build` | Production build of the frontend |
+| `make scrape` | Download course data from counts.oxy.edu into `data/raw` (cached; `terms=202602,202603`, `refresh=1`) |
 
 ## Dependencies
 
