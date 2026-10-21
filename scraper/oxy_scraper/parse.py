@@ -44,6 +44,13 @@ class ListRow:
         return self.lab_section is not None
 
 
+def detail_group(row: ListRow) -> tuple[str, ...]:
+    """Rows of one term that are described by a single detail popup: same course number and
+    title, with dash labs kept apart (some departments describe them separately)."""
+    title = " ".join(row.title.lower().split())
+    return (row.dept or "", row.number or "", title, "lab" if row.is_dash_lab else "")
+
+
 def soup(html: str) -> BeautifulSoup:
     return BeautifulSoup(html, "lxml")
 
@@ -125,6 +132,71 @@ def parse_list(doc: BeautifulSoup) -> list[ListRow]:
     return rows
 
 
+@dataclass(frozen=True)
+class Prerequisite:
+    course: str  # as shown, with grouping: "( COMP 131", "or APCA", "(and MATH 109"
+    min_grade: str  # a letter grade, or an exam score for AP/placement rows
+    concurrent: str
+    level: str
+
+
+@dataclass(frozen=True)
+class ReservedSeats:
+    reserved_for: str
+    max: int | None
+    open: int | None
+
+
+@dataclass
+class Detail:
+    """Course-level text from a detail popup. Its first row repeats the list row, so it is
+    not parsed again. The popup has no rooms and no textbook data (only a bookstore link)."""
+
+    crn: str
+    description: str | None
+    restrictions: list[str] = field(default_factory=list)
+    prerequisites: list[Prerequisite] = field(default_factory=list)
+    corequisites: str | None = None
+    reserved_seats: list[ReservedSeats] = field(default_factory=list)
+
+
+def to_int(text: str) -> int | None:
+    return int(text) if text.isdigit() else None
+
+
+def _table_cells(doc: BeautifulSoup, table_id: str) -> list[list[str]]:
+    table = doc.find("table", id=table_id)
+    if not isinstance(table, Tag):
+        return []
+    return [[_text(td) for td in cells] for tr in _rows(table) if (cells := _cells(tr))]
+
+
+def _span_text(doc: BeautifulSoup, span_id: str) -> str | None:
+    span = doc.find("span", id=span_id)
+    return (_text(span) or None) if isinstance(span, Tag) else None
+
+
+def parse_detail(doc: BeautifulSoup) -> Detail | None:
+    """The detail popup, or None if the page has none."""
+    crn = detail_crn(doc)
+    if crn is None:
+        return None
+    restrictions = doc.find("ul", id="blistRestrictions")
+    return Detail(
+        crn=crn,
+        description=detail_description(doc),
+        restrictions=[_text(li) for li in restrictions.find_all("li")]
+        if isinstance(restrictions, Tag)
+        else [],
+        prerequisites=[Prerequisite(*cells[:4]) for cells in _table_cells(doc, "gvPrereq")],
+        corequisites=_span_text(doc, "lblCorequisites"),
+        reserved_seats=[
+            ReservedSeats(cells[0], to_int(cells[1]), to_int(cells[2]))
+            for cells in _table_cells(doc, "gvResvDetails")
+        ],
+    )
+
+
 def detail_crn(doc: BeautifulSoup) -> str | None:
     """CRN shown in the detail popup (#gvDetails), or None if the page has no popup."""
     table = doc.find("table", id="gvDetails")
@@ -139,5 +211,4 @@ def detail_crn(doc: BeautifulSoup) -> str | None:
 
 def detail_description(doc: BeautifulSoup) -> str | None:
     """Course description in the detail popup (#lblCrseDesc)."""
-    span = doc.find("span", id="lblCrseDesc")
-    return _text(span) if isinstance(span, Tag) else None
+    return _span_text(doc, "lblCrseDesc")

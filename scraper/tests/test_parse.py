@@ -1,7 +1,10 @@
 from oxy_scraper.parse import (
+    Prerequisite,
+    ReservedSeats,
     detail_crn,
     detail_description,
     hidden_fields,
+    parse_detail,
     parse_list,
     select_options,
     soup,
@@ -76,3 +79,29 @@ def test_detail_description() -> None:
     text = detail_description(soup(fixture_html("detail_202602_2963.html")))
     assert text is not None and text.startswith("This course will begin with an exploration")
     assert detail_description(soup(fixture_html("home.html"))) is None
+
+
+def test_parse_detail_with_prerequisites() -> None:
+    detail = parse_detail(soup(fixture_html("detail_202602_2963.html")))
+    assert detail is not None
+    assert detail.crn == "2963"
+    assert detail.description is not None and detail.description.startswith("This course will")
+    assert detail.restrictions[-1] == "Course may be repeated for credit."
+    assert detail.prerequisites[0] == Prerequisite("( COMP 131", "D", "", "U")
+    assert detail.prerequisites[-1] == Prerequisite("or APCS)", "4", "", "")
+    assert len(detail.prerequisites) == 10
+    assert detail.corequisites is None
+    assert detail.reserved_seats == []
+
+
+def test_parse_detail_with_corequisites_and_reserved_seats() -> None:
+    detail = parse_detail(soup(fixture_html("detail_202702_2134.html")))
+    assert detail is not None
+    assert detail.crn == "2134"
+    assert detail.corequisites == "KINE 300L"
+    assert detail.reserved_seats == [
+        ReservedSeats("Major", 14, 14),
+        ReservedSeats("Transfer", 4, 4),
+    ]
+    assert detail.prerequisites == []
+    assert parse_detail(soup(fixture_html("list_202602_COMP.html"))) is None
