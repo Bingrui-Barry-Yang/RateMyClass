@@ -44,6 +44,7 @@ backend/app/
 ├── api/routes/       HTTP layer: parse input, call a service, return a schema
 ├── services/         Business rules (validation, lockouts, anonymous review tokens…)
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
+│   └── catalog.py    departments, terms, courses, sections, professors, section_professors
 └── schemas/          Pydantic request/response models
 ```
 
@@ -53,8 +54,25 @@ Rules of thumb:
   without HTTP.
 - Routes return Pydantic schemas, never ORM objects, so the API contract is explicit.
 - Schema changes go through Alembic: edit models, then `make migration m="..."`, then review the
-  generated file.
+  generated file. New revisions are run through ruff automatically (`alembic.ini` hooks), and CI
+  runs `alembic check` so models and migrations cannot drift apart.
 - Sync SQLAlchemy with psycopg 3. That is plenty for a few thousand users and keeps the code simple.
+
+### Catalog tables
+
+Filled by the scraper's import step; the API only reads them.
+
+| Table | Natural key | Notes |
+| --- | --- | --- |
+| `departments` | `code` | `COMP` / Computer Science |
+| `terms` | `code` | `202602`; `year` and `season` (fall/spring/summer) |
+| `courses` | `key` | `COMP-131`, or one topic of a topics course (`COMP-395-deep-learning`); latest description plus `description_history` |
+| `sections` | `(term_id, crn)` | one listed row: `kind` lecture/lab, dash labs point at their lecture (`parent_section_id`), `cross_list_group` links copies listed under several departments |
+| `professors` | `key` | `camarillo-abad-hector-miguel` |
+| `section_professors` | `(section_id, professor_id)` | co-teachers in listed order (`position`) |
+
+Rows missing from a later import get `active = false` rather than being deleted, because reviews
+reference sections and professors.
 
 ## Scraper
 
