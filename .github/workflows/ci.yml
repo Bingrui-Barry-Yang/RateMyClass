@@ -39,6 +39,7 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run mypy app tests scripts
       - run: uv run alembic upgrade head
+      - run: uv run alembic check  # models and migrations agree
       - run: uv run pytest
 
   scraper:
