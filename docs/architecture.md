@@ -20,15 +20,17 @@ same-origin in both environments and needs no CORS configuration.
 
 | Path | Purpose |
 | --- | --- |
-| `backend/` | FastAPI app, Alembic migrations, pytest suite (uv project) |
+| `backend/` | FastAPI app, Alembic migrations, pytest suite (uv workspace member) |
+| `scraper/` | Course data pipeline for counts.oxy.edu and DB importer (uv workspace member) |
 | `frontend/` | React single-page app (npm project) |
 | `docs/` | Architecture and design notes |
 | `.github/workflows/` | CI |
-| `scraper/` | *(planned)* Course data scraper for counts.oxy.edu and DB importer |
 | `deploy/` | *(planned)* Production Docker Compose, Caddyfile, backup scripts |
 
-When `scraper/` is added, the repo becomes a uv workspace (single `uv.lock` at the root) so
-the importer can reuse the backend's SQLAlchemy models.
+Python code is a uv workspace: the root `pyproject.toml` lists `backend` and `scraper`, and
+there is a single `uv.lock` and `.venv` at the repo root. The backend is installed as the `app`
+package so the scraper's importer can reuse its SQLAlchemy models. Python 3.12 is pinned in the
+root `.python-version`.
 
 ## Backend
 
