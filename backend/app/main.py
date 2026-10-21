@@ -1,32 +1,27 @@
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.routing import APIRoute
 
-from app.db import Base, engine
-from app.routes.courses import router as courses_router
-from app.routes.reviews import router as reviews_router
-from app.settings import settings
-
-Base.metadata.create_all(bind=engine)
-
-app = FastAPI(
-    title="RateMyClass API",
-    version="1.0.0",
-    description="FastAPI backend for the RateMyClass course review platform.",
-)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+from app.api.router import api_router
+from app.core.config import get_settings
 
 
-@app.get("/health")
-def healthcheck() -> dict[str, str]:
-    return {"status": "ok"}
+def _operation_id(route: APIRoute) -> str:
+    # Clean operation ids ("health" instead of "health_api_health_get") for the generated client.
+    return route.name
 
 
-app.include_router(courses_router, prefix="/api/v1")
-app.include_router(reviews_router, prefix="/api/v1")
+def create_app() -> FastAPI:
+    settings = get_settings()
+    app = FastAPI(
+        title="RateMyClassOxy API",
+        version="0.1.0",
+        openapi_url=f"{settings.api_prefix}/openapi.json",
+        docs_url=f"{settings.api_prefix}/docs",
+        redoc_url=None,
+        generate_unique_id_function=_operation_id,
+    )
+    app.include_router(api_router, prefix=settings.api_prefix)
+    return app
+
+
+app = create_app()

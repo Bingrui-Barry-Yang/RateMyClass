@@ -1,0 +1,22 @@
+# Local development services. Production uses deploy/ (added in a later stage).
+name: ratemyclass
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ratemyclass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ratemyclass}
+      POSTGRES_DB: ${POSTGRES_DB:-ratemyclass}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  db-data:
