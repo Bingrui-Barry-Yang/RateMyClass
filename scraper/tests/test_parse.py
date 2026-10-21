@@ -8,6 +8,7 @@ from oxy_scraper.parse import (
     parse_list,
     select_options,
     soup,
+    to_int,
 )
 
 from .conftest import fixture_html
@@ -105,3 +106,10 @@ def test_parse_detail_with_corequisites_and_reserved_seats() -> None:
     ]
     assert detail.prerequisites == []
     assert parse_detail(soup(fixture_html("list_202602_COMP.html"))) is None
+
+
+def test_to_int_keeps_negative_counts() -> None:
+    assert to_int("12") == 12
+    assert to_int("-2") == -2  # overfilled reserved seats
+    assert to_int("") is None
+    assert to_int("TBA") is None

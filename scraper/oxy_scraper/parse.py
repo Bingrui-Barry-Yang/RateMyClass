@@ -161,7 +161,8 @@ class Detail:
 
 
 def to_int(text: str) -> int | None:
-    return int(text) if text.isdigit() else None
+    """Counts as shown; "Rsrv Open" goes negative when reserved seats are overfilled."""
+    return int(text) if re.fullmatch(r"-?\d+", text) else None
 
 
 def _table_cells(doc: BeautifulSoup, table_id: str) -> list[list[str]]:
