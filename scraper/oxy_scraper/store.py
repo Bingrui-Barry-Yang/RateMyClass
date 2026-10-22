@@ -6,7 +6,9 @@ data/raw/<term>/list/<SUBJECT>.html.gz   results grid for one subject (its form 
 data/raw/<term>/detail/<CRN>.html.gz     detail popup (__VIEWSTATE blanked to save space)
 """
 
+import csv
 import gzip
+import io
 import json
 import os
 import re
@@ -32,6 +34,14 @@ def _atomic_write(path: Path, data: bytes) -> None:
 
 def write_json(path: Path, value: Any) -> None:
     _atomic_write(path, (json.dumps(value, indent=2, ensure_ascii=False) + "\n").encode())
+
+
+def write_csv(path: Path, header: list[str], rows: list[list[Any]]) -> None:
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(header)
+    writer.writerows(rows)
+    _atomic_write(path, buffer.getvalue().encode())
 
 
 def read_json(path: Path) -> Any:
