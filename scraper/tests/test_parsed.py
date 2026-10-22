@@ -3,7 +3,7 @@ from pathlib import Path
 
 from oxy_scraper.parse import parse_list, soup
 from oxy_scraper.parsed import build_term, parse_terms
-from oxy_scraper.store import RawStore, write_json
+from oxy_scraper.store import RawStore, TermMeta, write_json
 
 from .conftest import fixture_html
 
@@ -15,6 +15,9 @@ def seed_store(root: Path) -> RawStore:
     store = RawStore(root)
     write_json(store.terms_path(), [{"code": TERM, "label": "2026 Spring Semester"}])
     store.write_html(store.list_path(TERM, "COMP"), fixture_html("list_202602_COMP.html"))
+    store.save_meta(
+        TermMeta(TERM, "2026 Spring Semester", subjects={"COMP": {"label": "Computer Science"}})
+    )
     popup = fixture_html("detail_202602_2963.html")
     store.write_html(store.detail_path(TERM, "2963"), popup)
     relabelled = popup.replace("<td>2963</td>", "<td>2715</td>")
@@ -27,6 +30,7 @@ def test_build_term_links_sections_to_their_popup(tmp_path: Path) -> None:
     sections = {s["code_raw"]: s for s in data["sections"]}
 
     assert data["term_label"] == "2026 Spring Semester"
+    assert data["subjects"] == {"COMP": "Computer Science"}
     assert len(sections) == len(parse_list(soup(fixture_html("list_202602_COMP.html"))))
     assert sections["COMP 395 2"]["detail_crn"] == "2963"
     assert sections["COMP 395 2"]["detail_shared"] is False

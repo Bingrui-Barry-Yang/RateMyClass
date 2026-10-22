@@ -92,9 +92,13 @@ def build_term(store: RawStore, term: str) -> tuple[dict[str, Any], TermSummary]
         else:
             summary.shared_detail += 1
 
+    meta = store.load_meta(term)
     data = {
         "term": term,
         "term_label": label,
+        "subjects": {code: info["label"] for code, info in sorted(meta.subjects.items())}
+        if meta
+        else {},
         "sections": sections,
         "details": {crn: asdict(d) for crn, d in sorted(details.items())},
     }
