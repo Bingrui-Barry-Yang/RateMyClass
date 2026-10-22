@@ -8,6 +8,7 @@ from oxy_scraper import paths
 from oxy_scraper.client import CountsClient
 from oxy_scraper.exclusions import load_exclusions
 from oxy_scraper.fetch import AbortRun, Fetcher
+from oxy_scraper.load import load_catalog, read_catalog
 from oxy_scraper.normalize import Normalizer, load_parsed, write_result
 from oxy_scraper.overrides import load_overrides
 from oxy_scraper.parsed import parse_terms
@@ -50,7 +51,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="group data/parsed into courses/sections/professors (data/normalized) and write "
         "review reports (data/reports)",
     )
+    commands.add_parser(
+        "load", help="upsert data/normalized into the Postgres catalog tables (one transaction)"
+    )
     return parser
+
+
+def run_load() -> int:
+    from app.db.session import SessionLocal  # connects to DATABASE_URL; only needed here
+
+    if not (paths.NORMALIZED_DIR / "courses.json").exists():
+        log.error("no data in %s (run normalize first)", paths.NORMALIZED_DIR)
+        return 2
+    catalog = read_catalog(paths.NORMALIZED_DIR)
+    with SessionLocal() as session:
+        stats = load_catalog(session, catalog)
+        session.commit()
+    log.info("loaded (+inserted ~existing -deactivated): %s", stats.summary())
+    return 0
 
 
 def run_normalize() -> int:
@@ -131,5 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_parse(args)
     if args.command == "normalize":
         return run_normalize()
+    if args.command == "load":
+        return run_load()
     parser.print_help()
     return 0

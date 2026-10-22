@@ -49,6 +49,7 @@ Run `make help` for the full list.
 | `make build` | Production build of the frontend |
 | `make scrape` | Download course data from counts.oxy.edu into `data/raw` (cached) and parse it into `data/parsed` (`terms=202602,202603`, `refresh=1`) |
 | `make normalize` | Group parsed data into courses, sections and professors (`data/normalized`) and write review reports (`data/reports`) |
+| `make import` | Normalize, then load the catalog into the database (upsert; safe to rerun). Needs `make db-up migrate` and `make scrape` first |
 
 ## Dependencies
 

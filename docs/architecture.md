@@ -82,6 +82,7 @@ scraper/oxy_scraper/
 ├── fetch.py       Step 1: list + detail pages -> data/raw (cached, resumable)
 ├── parsed.py      Step 2: data/raw -> data/parsed/<term>.json (offline)
 ├── normalize.py   Step 3: data/parsed + overrides -> data/normalized/*.json + data/reports/*.csv
+├── load.py        Step 4: data/normalized -> Postgres catalog tables (upsert, one transaction)
 ├── parse.py       HTML -> rows and details (pure functions, tested against saved fixtures)
 ├── titles.py      "Main: Subtitle" splitting, slugs, abbreviation-insensitive title comparison
 ├── names.py       Professor names and keys ("camarillo-abad-hector-miguel")
@@ -147,6 +148,14 @@ rejected renumbering candidates), `professor_suspects`, `cross_lists`, `unmatche
 `excluded`, `all_sections` (every section on one row with course title and professor names,
 for spot checks in a spreadsheet) and `all_courses` (the same grouped by course: numbers with
 terms, professors, listed titles, description).
+
+The load step (`make import` = normalize + load) upserts on natural keys: term code, department
+code, course key, professor key, and term + CRN (CRNs are reused across terms). Loading twice
+changes nothing. Courses, professors and sections missing from the data get `active = false`
+and come back when listed again; each loaded section's professors are replaced by the listed
+ones. The whole load is one transaction. Scraper tests that touch the database (and the backend
+`db` fixture) empty the catalog tables inside a rolled-back transaction, so a local database
+keeps its imported data; CI gives the `scraper` job its own Postgres.
 
 ## Frontend
 
