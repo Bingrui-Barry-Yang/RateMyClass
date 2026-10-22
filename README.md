@@ -48,6 +48,7 @@ Run `make help` for the full list.
 | `make format` | Auto-format all code |
 | `make build` | Production build of the frontend |
 | `make scrape` | Download course data from counts.oxy.edu into `data/raw` (cached) and parse it into `data/parsed` (`terms=202602,202603`, `refresh=1`) |
+| `make normalize` | Group parsed data into courses, sections and professors (`data/normalized`) and write review reports (`data/reports`) |
 
 ## Dependencies
 

@@ -81,9 +81,13 @@ scraper/oxy_scraper/
 ├── client.py      CountsClient: WebForms postbacks, >=1 s between requests, retry/backoff
 ├── fetch.py       Step 1: list + detail pages -> data/raw (cached, resumable)
 ├── parsed.py      Step 2: data/raw -> data/parsed/<term>.json (offline)
+├── normalize.py   Step 3: data/parsed + overrides -> data/normalized/*.json + data/reports/*.csv
 ├── parse.py       HTML -> rows and details (pure functions, tested against saved fixtures)
-├── store.py       data/raw layout (gzip HTML + meta.json per term)
+├── titles.py      "Main: Subtitle" splitting, slugs, abbreviation-insensitive title comparison
+├── names.py       Professor names and keys ("camarillo-abad-hector-miguel")
+├── store.py       data/raw layout (gzip HTML + meta.json per term), JSON/CSV writers
 ├── exclusions.py  Listings that never become courses (scraper/overrides/exclusions.csv)
+├── overrides.py   Hand corrections (scraper/overrides/course_overrides.csv, professor_aliases.csv)
 └── cli.py         python -m oxy_scraper <command>
 ```
 
@@ -101,6 +105,48 @@ names, meetings, core, seats) plus the parsed popups keyed by CRN (description, 
 prerequisites, corequisites, reserved seats). Each section's `detail_crn` names the popup that
 describes it; `detail_shared` is true when that popup was fetched for another section of the
 same course. Popups contain no rooms and no textbook list.
+
+The normalize step (`make normalize`) decides what a course is:
+
+- A course is dept + number (`COMP-131`). Dash labs (`COMP 131 1-1`) join their lecture's course
+  and point at the lecture section; lab numbers (`BIO 224L`) join the base course.
+- A *topics number* holds a different course in each section: a title with a topics prefix and
+  a subtitle (`Special Topics in Computer Science. Deep Learning`), a description saying "Topics
+  vary", or one main title with several subtitles (`Senior Seminar: Health Economics`). Each
+  topic is its own course keyed by the subtitle (`COMP-395-deep-learning`), so `:` and `.`
+  spellings merge across terms. Sections with only the generic title become an untitled course
+  per number and professor (`BIO-103-untitled-williams-jonathan-p`). "Topics (will) vary" counts
+  only when the number has had more than one title. `split_by_title` makes every title a course;
+  for a whole department (first-year seminars) the number is ignored, because FYS numbers are
+  slots: a seminar that moves from FYS 24 to FYS 13 stays `FYS-imagining-freedom`.
+- A course that only changed its number is merged into the newer one: same department and
+  level (hundreds digit), terms that do not overlap, description similarity >= 0.85, a shared
+  professor, and not a I/II pair. `numbers` lists every number with its terms, so a page can
+  say "listed as PHYS 266 in 2021 Spring". `keep_apart` stops a wrong merge.
+- "Instructor Unassigned" is a placeholder, not a professor.
+- Title spellings that differ only by case, punctuation or abbreviations
+  (`Fundamentals/Computer Sci Lab`) are the same title; topics spelled that way share one key.
+  Other title differences are reported.
+- Evidence rule: two topics of one number (for first-year seminars: of the department) with
+  near-identical descriptions (>= 0.85) and a shared professor are one course, whatever their
+  titles (`Urban Fictions` / `Urban Fictions: The Modern City in Literature...`).
+- A course's description is its latest term's text; every change is kept in
+  `description_history`.
+- Cross-listed sections share a `cross_list_group`: same term, same professors, same meeting
+  time, at least two departments. Sections without a time (directed research) are not grouped.
+- The source writes curly apostrophes and dashes as `?` (`Man?s`); normalize restores them.
+
+`scraper/overrides/` holds the reviewed corrections: `exclusions.csv`, `course_overrides.csv`
+(`set_topic`, `merge_into`, `set_title`, `split_by_title`, `keep_apart`) and
+`professor_aliases.csv`. Bad
+rows or unknown keys stop the run. `data/reports/` lists what a person should look at:
+`topic_courses` (why a number was split, the sibling with the most similar title and one with
+the same description), `title_changes`, `description_changes`, `evidence_merges`, `renumbered`
+(merged and
+rejected renumbering candidates), `professor_suspects`, `cross_lists`, `unmatched_labs`,
+`excluded`, `all_sections` (every section on one row with course title and professor names,
+for spot checks in a spreadsheet) and `all_courses` (the same grouped by course: numbers with
+terms, professors, listed titles, description).
 
 ## Frontend
 

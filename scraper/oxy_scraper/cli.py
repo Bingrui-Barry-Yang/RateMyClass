@@ -8,6 +8,8 @@ from oxy_scraper import paths
 from oxy_scraper.client import CountsClient
 from oxy_scraper.exclusions import load_exclusions
 from oxy_scraper.fetch import AbortRun, Fetcher
+from oxy_scraper.normalize import Normalizer, load_parsed, write_result
+from oxy_scraper.overrides import load_overrides
 from oxy_scraper.parsed import parse_terms
 from oxy_scraper.store import RawStore
 
@@ -43,7 +45,33 @@ def build_parser() -> argparse.ArgumentParser:
     parse.add_argument(
         "--terms", help="comma-separated term codes (default: every term in data/raw)"
     )
+    commands.add_parser(
+        "normalize",
+        help="group data/parsed into courses/sections/professors (data/normalized) and write "
+        "review reports (data/reports)",
+    )
     return parser
+
+
+def run_normalize() -> int:
+    parsed = load_parsed(paths.PARSED_DIR)
+    if not parsed:
+        log.error("no files in %s (run parse first)", paths.PARSED_DIR)
+        return 2
+    result = Normalizer(parsed, load_exclusions(), load_overrides()).run()
+    write_result(result, paths.NORMALIZED_DIR, paths.REPORTS_DIR)
+    log.info(
+        "done: %d terms, %d departments, %d courses, %d sections, %d professors -> %s",
+        len(result.terms),
+        len(result.departments),
+        len(result.courses),
+        len(result.sections),
+        len(result.professors),
+        paths.NORMALIZED_DIR,
+    )
+    for name, (_, rows) in result.reports.items():
+        log.info("report %s: %d rows", name, len(rows))
+    return 0
 
 
 def run_parse(args: argparse.Namespace) -> int:
@@ -101,5 +129,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_fetch(args)
     if args.command == "parse":
         return run_parse(args)
+    if args.command == "normalize":
+        return run_normalize()
     parser.print_help()
     return 0
