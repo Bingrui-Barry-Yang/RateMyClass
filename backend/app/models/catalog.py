@@ -7,7 +7,16 @@ marked `active = false` instead of deleted, because reviews will reference them.
 
 from typing import Any
 
-from sqlalchemy import Boolean, CheckConstraint, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -49,6 +58,11 @@ class Course(Base):
     title: Mapped[str] = mapped_column(String(300))  # display title (latest lecture title)
     full_title: Mapped[str] = mapped_column(String(300))  # as listed, e.g. with "Special Topics"
     title_variants: Mapped[list[str]] = mapped_column(JSONB, default=list)
+    # Every number the course was listed under, with its terms (renumbered courses, FYS slots):
+    # [{"number": "266", "terms": ["202102"]}, {"number": "206", "terms": ["202701"]}]
+    numbers: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
     is_topic: Mapped[bool] = mapped_column(Boolean, default=False)
     units: Mapped[int | None] = mapped_column(Integer)
     # Latest term's text; earlier wordings live in description_history.
