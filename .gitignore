@@ -23,7 +23,7 @@ coverage/
 openapi.json
 
 # Scraper output (never committed)
-data/raw/
+data/
 
 # OS / editors
 .DS_Store

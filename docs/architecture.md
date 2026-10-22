@@ -20,15 +20,17 @@ same-origin in both environments and needs no CORS configuration.
 
 | Path | Purpose |
 | --- | --- |
-| `backend/` | FastAPI app, Alembic migrations, pytest suite (uv project) |
+| `backend/` | FastAPI app, Alembic migrations, pytest suite (uv workspace member) |
+| `scraper/` | Course data pipeline for counts.oxy.edu and DB importer (uv workspace member) |
 | `frontend/` | React single-page app (npm project) |
 | `docs/` | Architecture and design notes |
 | `.github/workflows/` | CI |
-| `scraper/` | *(planned)* Course data scraper for counts.oxy.edu and DB importer |
 | `deploy/` | *(planned)* Production Docker Compose, Caddyfile, backup scripts |
 
-When `scraper/` is added, the repo becomes a uv workspace (single `uv.lock` at the root) so
-the importer can reuse the backend's SQLAlchemy models.
+Python code is a uv workspace: the root `pyproject.toml` lists `backend` and `scraper`, and
+there is a single `uv.lock` and `.venv` at the repo root. The backend is installed as the `app`
+package so the scraper's importer can reuse its SQLAlchemy models. Python 3.12 is pinned in the
+root `.python-version`.
 
 ## Backend
 
@@ -42,6 +44,7 @@ backend/app/
 ├── api/routes/       HTTP layer: parse input, call a service, return a schema
 ├── services/         Business rules (validation, lockouts, anonymous review tokens…)
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
+│   └── catalog.py    departments, terms, courses, sections, professors, section_professors
 └── schemas/          Pydantic request/response models
 ```
 
@@ -51,8 +54,108 @@ Rules of thumb:
   without HTTP.
 - Routes return Pydantic schemas, never ORM objects, so the API contract is explicit.
 - Schema changes go through Alembic: edit models, then `make migration m="..."`, then review the
-  generated file.
+  generated file. New revisions are run through ruff automatically (`alembic.ini` hooks), and CI
+  runs `alembic check` so models and migrations cannot drift apart.
 - Sync SQLAlchemy with psycopg 3. That is plenty for a few thousand users and keeps the code simple.
+
+### Catalog tables
+
+Filled by the scraper's import step; the API only reads them.
+
+| Table | Natural key | Notes |
+| --- | --- | --- |
+| `departments` | `code` | `COMP` / Computer Science |
+| `terms` | `code` | `202602`; `year` and `season` (fall/spring/summer) |
+| `courses` | `key` | `COMP-131`, or one topic of a topics course (`COMP-395-deep-learning`); latest description plus `description_history` |
+| `sections` | `(term_id, crn)` | one listed row: `kind` lecture/lab, dash labs point at their lecture (`parent_section_id`), `cross_list_group` links copies listed under several departments |
+| `professors` | `key` | `camarillo-abad-hector-miguel` |
+| `section_professors` | `(section_id, professor_id)` | co-teachers in listed order (`position`) |
+
+Rows missing from a later import get `active = false` rather than being deleted, because reviews
+reference sections and professors.
+
+## Scraper
+
+```
+scraper/oxy_scraper/
+├── client.py      CountsClient: WebForms postbacks, >=1 s between requests, retry/backoff
+├── fetch.py       Step 1: list + detail pages -> data/raw (cached, resumable)
+├── parsed.py      Step 2: data/raw -> data/parsed/<term>.json (offline)
+├── normalize.py   Step 3: data/parsed + overrides -> data/normalized/*.json + data/reports/*.csv
+├── load.py        Step 4: data/normalized -> Postgres catalog tables (upsert, one transaction)
+├── parse.py       HTML -> rows and details (pure functions, tested against saved fixtures)
+├── titles.py      "Main: Subtitle" splitting, slugs, abbreviation-insensitive title comparison
+├── names.py       Professor names and keys ("camarillo-abad-hector-miguel")
+├── store.py       data/raw layout (gzip HTML + meta.json per term), JSON/CSV writers
+├── exclusions.py  Listings that never become courses (scraper/overrides/exclusions.csv)
+├── overrides.py   Hand corrections (scraper/overrides/course_overrides.csv, professor_aliases.csv)
+└── cli.py         python -m oxy_scraper <command>
+```
+
+counts.oxy.edu is an ASP.NET WebForms page that keeps its state in `__VIEWSTATE`, so a saved
+page can be replayed later to post back from it. The fetcher asks for one subject at a time, and
+only for subjects in that term's own dropdown (empty subjects make the server return HTTP 500).
+Detail popups are fetched once per term per (dept, number, title), so description changes are
+kept; for topic courses ("Special Topics"/"Topics in" titles, or "Topics vary" in a
+description) every section in every term is fetched. Labs listed under a lecture ("COMP 131 1-1")
+are grouped by their own title, because some departments give them their own description. The
+fetcher stops after 5 failures in a row; rerunning resumes where it stopped.
+
+The parse step writes one JSON file per term: every listed row as shown (instructors with full
+names, meetings, core, seats) plus the parsed popups keyed by CRN (description, restrictions,
+prerequisites, corequisites, reserved seats). Each section's `detail_crn` names the popup that
+describes it; `detail_shared` is true when that popup was fetched for another section of the
+same course. Popups contain no rooms and no textbook list.
+
+The normalize step (`make normalize`) decides what a course is:
+
+- A course is dept + number (`COMP-131`). Dash labs (`COMP 131 1-1`) join their lecture's course
+  and point at the lecture section; lab numbers (`BIO 224L`) join the base course.
+- A *topics number* holds a different course in each section: a title with a topics prefix and
+  a subtitle (`Special Topics in Computer Science. Deep Learning`), a description saying "Topics
+  vary", or one main title with several subtitles (`Senior Seminar: Health Economics`). Each
+  topic is its own course keyed by the subtitle (`COMP-395-deep-learning`), so `:` and `.`
+  spellings merge across terms. Sections with only the generic title become an untitled course
+  per number and professor (`BIO-103-untitled-williams-jonathan-p`). "Topics (will) vary" counts
+  only when the number has had more than one title. `split_by_title` makes every title a course;
+  for a whole department (first-year seminars) the number is ignored, because FYS numbers are
+  slots: a seminar that moves from FYS 24 to FYS 13 stays `FYS-imagining-freedom`.
+- A course that only changed its number is merged into the newer one: same department and
+  level (hundreds digit), terms that do not overlap, description similarity >= 0.85, a shared
+  professor, and not a I/II pair. `numbers` lists every number with its terms, so a page can
+  say "listed as PHYS 266 in 2021 Spring". `keep_apart` stops a wrong merge.
+- "Instructor Unassigned" is a placeholder, not a professor.
+- Title spellings that differ only by case, punctuation or abbreviations
+  (`Fundamentals/Computer Sci Lab`) are the same title; topics spelled that way share one key.
+  Other title differences are reported.
+- Evidence rule: two topics of one number (for first-year seminars: of the department) with
+  near-identical descriptions (>= 0.85) and a shared professor are one course, whatever their
+  titles (`Urban Fictions` / `Urban Fictions: The Modern City in Literature...`).
+- A course's description is its latest term's text; every change is kept in
+  `description_history`.
+- Cross-listed sections share a `cross_list_group`: same term, same professors, same meeting
+  time, at least two departments. Sections without a time (directed research) are not grouped.
+- The source writes curly apostrophes and dashes as `?` (`Man?s`); normalize restores them.
+
+`scraper/overrides/` holds the reviewed corrections: `exclusions.csv`, `course_overrides.csv`
+(`set_topic`, `merge_into`, `set_title`, `split_by_title`, `keep_apart`) and
+`professor_aliases.csv`. Bad
+rows or unknown keys stop the run. `data/reports/` lists what a person should look at:
+`topic_courses` (why a number was split, the sibling with the most similar title and one with
+the same description), `title_changes`, `description_changes`, `evidence_merges`, `renumbered`
+(merged and
+rejected renumbering candidates), `professor_suspects`, `cross_lists`, `unmatched_labs`,
+`excluded`, `all_sections` (every section on one row with course title and professor names,
+for spot checks in a spreadsheet) and `all_courses` (the same grouped by course: numbers with
+terms, professors, listed titles, description).
+
+The load step (`make import` = normalize + load) upserts on natural keys: term code, department
+code, course key, professor key, and term + CRN (CRNs are reused across terms). Loading twice
+changes nothing. Courses, professors and sections missing from the data get `active = false`
+and come back when listed again; each loaded section's professors are replaced by the listed
+ones. The whole load is one transaction. Scraper tests that touch the database (and the backend
+`db` fixture) empty the catalog tables inside a rolled-back transaction, so a local database
+keeps its imported data; CI gives the `scraper` job its own Postgres.
 
 ## Frontend
 

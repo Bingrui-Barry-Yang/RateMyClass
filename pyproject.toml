@@ -1,0 +1,3 @@
+# uv workspace root: one lockfile and one .venv for every Python package in the repo.
+[tool.uv.workspace]
+members = ["backend", "scraper"]

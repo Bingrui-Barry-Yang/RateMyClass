@@ -36,23 +36,26 @@ Run `make help` for the full list.
 
 | Command | What it does |
 | --- | --- |
-| `make setup` | Install dependencies exactly as locked (`uv sync --locked`, `npm ci`) |
+| `make setup` | Install dependencies exactly as locked (`uv sync --locked --all-packages`, `npm ci`) |
 | `make db-up` / `make db-down` | Start / stop local Postgres |
 | `make db-reset` | Wipe the local database and re-run migrations |
 | `make dev` | Run backend and frontend with hot reload |
 | `make migrate` | Apply migrations |
 | `make migration m="..."` | Autogenerate a migration from model changes |
 | `make gen-api` | Regenerate frontend API types from the backend OpenAPI schema |
-| `make test` | Backend (pytest) and frontend (Vitest) tests |
+| `make test` | Backend and scraper (pytest) and frontend (Vitest) tests |
 | `make lint` | Lint, format check and type check (ruff, mypy, oxlint, prettier, tsc) |
 | `make format` | Auto-format all code |
 | `make build` | Production build of the frontend |
+| `make scrape` | Download course data from counts.oxy.edu into `data/raw` (cached) and parse it into `data/parsed` (`terms=202602,202603`, `refresh=1`) |
+| `make normalize` | Group parsed data into courses, sections and professors (`data/normalized`) and write review reports (`data/reports`) |
+| `make import` | Normalize, then load the catalog into the database (upsert; safe to rerun). Needs `make db-up migrate` and `make scrape` first |
 
 ## Dependencies
 
-Lockfiles are committed: `backend/uv.lock` and `frontend/package-lock.json`.
+Lockfiles are committed: `uv.lock` (repo root, shared by the `backend` and `scraper` uv workspace members) and `frontend/package-lock.json`.
 
-- Backend: `cd backend && uv add <pkg>` (or `uv add --dev <pkg>`). Never edit `uv.lock` by hand.
+- Python: `cd backend && uv add <pkg>` or `cd scraper && uv add <pkg>` (add `--dev` for dev tools). Never edit `uv.lock` by hand.
 - Frontend: `cd frontend && npm install <pkg>` (or `-D` for dev tools).
 
 ## Contributing
