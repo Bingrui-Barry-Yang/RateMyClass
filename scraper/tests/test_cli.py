@@ -19,3 +19,17 @@ def test_data_dirs_live_under_repo_root() -> None:
 def test_parse_unknown_term_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(paths, "RAW_DIR", tmp_path)
     assert main(["parse", "--terms", "209901"]) == 2
+
+
+def test_load_without_normalized_data_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(paths, "NORMALIZED_DIR", tmp_path)
+    assert main(["load", "--dry-run"]) == 2
+
+
+def test_update_options_parse() -> None:
+    from oxy_scraper.cli import build_parser
+
+    args = build_parser().parse_args(["update", "--terms", "202702", "--all"])
+    assert (args.terms, args.all, args.delay) == ("202702", True, 1.0)

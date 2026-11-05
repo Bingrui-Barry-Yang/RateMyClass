@@ -11,6 +11,10 @@ Request budget (why this is cheap for the server):
   can be a different course. Dash labs ("COMP 131 1-1") are deduplicated by their own title,
   since some departments give them their own description ("Laboratory associated with ...").
   Each detail is one small POST replayed from the saved per-subject list page.
+
+Which detail pages a term has is a function of its lists alone (`wanted_details`): the first row
+of each group, or every row of a topic course. Missing ones are fetched and extra ones removed,
+so a term looks the same whether it was downloaded fresh or updated (see sync.py).
 """
 
 import logging
@@ -35,7 +39,7 @@ from oxy_scraper.store import RawStore, TermMeta, now_iso, write_json
 log = logging.getLogger(__name__)
 
 MAX_CONSECUTIVE_FAILURES = 5
-MAX_DETAIL_ROUNDS = 3  # a round can reveal new topic courses, which adds jobs for the next one
+MAX_DETAIL_ROUNDS = 5  # a round can reveal (or drop) topic courses, which changes the next one
 TOPIC_TITLE_RE = re.compile(r"\b(special topics|topics in)\b", re.IGNORECASE)
 TOPIC_DESCRIPTION_RE = re.compile(r"\btopics vary\b", re.IGNORECASE)
 
@@ -56,9 +60,19 @@ class DetailJob:
 
 
 class Fetcher:
-    def __init__(self, client: CountsClient, store: RawStore, exclusions: list[Exclusion]) -> None:
+    def __init__(
+        self,
+        client: CountsClient,
+        store: RawStore,
+        exclusions: list[Exclusion],
+        *,
+        reference: RawStore | None = None,
+    ) -> None:
+        """`store` receives the downloads. `reference` holds the other terms (the main data/raw
+        when `store` is the staging area): topic courses are recognised across all terms."""
         self.client = client
         self.store = store
+        self.reference = reference
         self.exclusions = exclusions
         self._home_fields: dict[str, str] | None = None
         self._term_fields: dict[str, dict[str, str]] = {}
@@ -91,20 +105,21 @@ class Fetcher:
 
     # --- lists -----------------------------------------------------------------------------
 
-    def fetch_lists(self, term: str, label: str, *, refresh: bool = False) -> TermMeta:
+    def fetch_lists(self, term: str, label: str) -> TermMeta:
+        """Download the subject lists of `term` that `store` does not have yet."""
         meta = self.store.load_meta(term)
-        if meta and meta.complete and not refresh:
+        if meta and meta.complete:
             log.info("%s %s: lists cached (%d subjects)", term, label, len(meta.subjects))
             return meta
         fields = self._term_page_fields(term)
         offered = self._term_subjects[term]
-        if meta is None or refresh:
+        if meta is None:
             meta = TermMeta(term=term, label=label)
         meta.offered_subjects = [code for code, _ in offered]
         meta.skipped_subjects = [c for c, _ in offered if is_excluded(self.exclusions, c, "")]
         log.info("%s %s: %d subjects offered", term, label, len(offered))
         for code, subject_label in offered:
-            if code in meta.skipped_subjects or (code in meta.subjects and not refresh):
+            if code in meta.skipped_subjects or code in meta.subjects:
                 continue
             try:
                 html = self.client.list_subject(fields, term, code)
@@ -126,27 +141,38 @@ class Fetcher:
 
     # --- details ---------------------------------------------------------------------------
 
-    def _cached_rows(self, term: str) -> Iterator[tuple[str, ListRow]]:
-        for subject in self.store.cached_subjects(term):
-            html = self.store.read_html(self.store.list_path(term, subject))
+    def _cached_rows(
+        self, term: str, store: RawStore | None = None
+    ) -> Iterator[tuple[str, ListRow]]:
+        store = store or self.store
+        for subject in store.cached_subjects(term):
+            html = store.read_html(store.list_path(term, subject))
             for row in parse_list(soup(html)):
                 if self._wants_detail(row):
                     yield subject, row
 
+    def _term_stores(self) -> list[tuple[str, RawStore]]:
+        """Every known term with the store that holds it (`store` wins over `reference`)."""
+        own = self.store.cached_terms()
+        pairs = [(t, self.store) for t in own]
+        if self.reference is not None:
+            pairs += [(t, self.reference) for t in self.reference.cached_terms() if t not in own]
+        return pairs
+
     def topic_numbers(self) -> set[CourseNumber]:
         """Course numbers whose sections can each be a different course."""
         topics: set[CourseNumber] = set()
-        for term in self.store.cached_terms():
-            for _, row in self._cached_rows(term):
+        for term, store in self._term_stores():
+            for _, row in self._cached_rows(term, store):
                 number = (row.dept or "", row.number or "")
                 if number in topics:
                     continue
                 if TOPIC_TITLE_RE.search(row.title):
                     topics.add(number)
                     continue
-                path = self.store.detail_path(term, row.crn)
+                path = store.detail_path(term, row.crn)
                 if path.exists():
-                    html = self.store.read_html(path)
+                    html = store.read_html(path)
                     # Cheap substring test first; only parse pages that might match.
                     if "topics vary" in html.lower() and TOPIC_DESCRIPTION_RE.search(
                         detail_description(soup(html)) or ""
@@ -154,39 +180,61 @@ class Fetcher:
                         topics.add(number)
         return topics
 
-    def plan_details(self, terms: Iterable[str]) -> list[DetailJob]:
-        """Detail pages still missing for `terms`: every section of topic courses, otherwise one
-        section per term per (dept, number, title), with dash labs grouped apart."""
-        topics = self.topic_numbers()
+    def wanted_details(
+        self, term: str, topics: set[CourseNumber]
+    ) -> dict[str, tuple[str, ListRow]]:
+        """CRN -> (subject, row) of the detail pages `term` should have: every section of topic
+        courses, otherwise the first section per (dept, number, title), dash labs apart."""
+        groups: dict[tuple[str, ...], tuple[str, ListRow]] = {}
+        for subject, row in self._cached_rows(term):
+            if (row.dept or "", row.number or "") in topics and not row.is_dash_lab:
+                key: tuple[str, ...] = (row.crn,)
+            else:
+                key = detail_group(row)
+            groups.setdefault(key, (subject, row))
+        return {row.crn: (subject, row) for subject, row in groups.values()}
+
+    def plan_details(
+        self, terms: Iterable[str], topics: set[CourseNumber] | None = None
+    ) -> list[DetailJob]:
+        """Wanted detail pages of `terms` that are not saved yet."""
+        topics = self.topic_numbers() if topics is None else topics
         jobs = []
         for term in sorted(set(terms), reverse=True):
-            groups: dict[tuple[str, ...], list[tuple[str, ListRow]]] = {}
-            for subject, row in self._cached_rows(term):
-                if (row.dept or "", row.number or "") in topics and not row.is_dash_lab:
-                    key: tuple[str, ...] = (row.crn,)
-                else:
-                    key = detail_group(row)
-                groups.setdefault(key, []).append((subject, row))
-            for members in groups.values():
-                if any(self.store.detail_path(term, r.crn).exists() for _, r in members):
-                    continue
-                subject, row = members[0]
-                jobs.append(DetailJob(term, subject, row.crn, row.event_target, row.code_raw))
+            for crn, (subject, row) in self.wanted_details(term, topics).items():
+                if not self.store.detail_path(term, crn).exists():
+                    jobs.append(DetailJob(term, subject, crn, row.event_target, row.code_raw))
         return jobs
 
+    def prune_details(self, terms: Iterable[str], topics: set[CourseNumber]) -> int:
+        """Delete saved detail pages of `terms` that are no longer wanted (the row is gone, or
+        the course stopped being a topic course). Returns how many were deleted."""
+        removed = 0
+        for term in set(terms):
+            wanted = self.wanted_details(term, topics)
+            for path in self.store.detail_paths(term):
+                if path.name.removesuffix(".html.gz") not in wanted:
+                    path.unlink()
+                    removed += 1
+        if removed:
+            log.info("removed %d detail pages that are no longer wanted", removed)
+        return removed
+
     def fetch_all_details(self, terms: list[str], *, dry_run: bool = False) -> int:
-        """Plan, fetch, and re-plan until no detail is missing (newly found topic courses add
-        jobs). Returns the number of pages fetched."""
+        """Fetch missing and remove unwanted detail pages of `terms`, repeating while that
+        changes which courses are topic courses. Returns the number of pages fetched."""
         fetched = 0
         for _ in range(MAX_DETAIL_ROUNDS):
-            jobs = self.plan_details(terms)
+            topics = self.topic_numbers()
+            removed = 0 if dry_run else self.prune_details(terms, topics)
+            jobs = self.plan_details(terms, topics)
             jobs = [j for j in jobs if (j.term, j.crn) not in self._given_up]
             log.info(
                 "%d detail pages to fetch (about %.0f min)",
                 len(jobs),
                 len(jobs) * self.client.min_interval / 60,
             )
-            if not jobs or dry_run:
+            if dry_run or not (jobs or removed):
                 break
             fetched += self.fetch_details(jobs)
         return fetched

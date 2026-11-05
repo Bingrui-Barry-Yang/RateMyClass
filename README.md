@@ -42,19 +42,37 @@ make scrape    # first run downloads all terms (~1 request/s, a few hours); safe
 make import    # groups the data into courses and loads it into the database; safe to rerun
 ```
 
-After the first run, fetch only new or changed terms with `make scrape terms=202701` (add `refresh=1` to
-download a term again), then `make import`.
+### Updating course data
+
+When counts.oxy.edu changes (classes cancelled, moved or reassigned, descriptions edited, a new term
+published):
+
+```bash
+make update    # re-downloads new and changed terms, then reports what the import would change
+make import    # applies it; check data/reports/update/<time>/summary.txt first
+```
+
+`make update` checks the current academic year and later plus any term new on the site, and
+re-downloads in full the terms that are new, changed, current or upcoming (a few minutes); the result
+is the same as downloading those terms again. Older terms are not checked: `all=1` checks and
+re-downloads every term the site lists (~30 min), which also picks up changes the school made to a
+past term. `terms=202702` re-downloads only the named terms. An interrupted or failed run changes nothing and
+resumes on the next run. Terms the site no longer lists are kept.
+
+`make import` makes the database match the data: cancelled sections are deleted, changed ones updated
+in place. It stops if a term would lose more than 20% of its sections (usually a site problem); run
+`make import force=1` if the cancellations are real.
 
 | Folder | Contents |
 | --- | --- |
 | `data/raw` | Downloaded pages (gzip HTML), so parsing can be redone without the network |
 | `data/parsed` | One JSON file per term: every listed section as shown, plus course details |
 | `data/normalized` | Terms, departments, courses, sections and professors, the input of `make import` |
-| `data/reports` | CSV reports for review (topic splits, title changes, renumbered courses, possible duplicate professors, unmatched labs, and full tables of all sections and courses) |
+| `data/reports` | CSV reports for review (topic splits, title changes, renumbered courses, possible duplicate professors, unmatched labs, overrides that no longer match anything, and full tables of all sections and courses); `data/reports/update/<time>/` holds what each import changed |
 
 Corrections are made by hand in the committed CSV files in `scraper/overrides/`, never in the database:
 `exclusions.csv` (what to skip), `course_overrides.csv` (topic names, merges, titles, numbers reused for
-different courses) and `professor_aliases.csv` (one professor listed under several names). After editing
+different courses, courses to keep apart or to link as "formerly") and `professor_aliases.csv` (one professor listed under several names). After editing
 them, run `make import` again (it re-runs normalize first) and check `data/reports`.
 
 ## Commands
@@ -74,9 +92,10 @@ Run `make help` for the full list.
 | `make lint` | Lint, format check and type check (ruff, mypy, oxlint, prettier, tsc) |
 | `make format` | Auto-format all code |
 | `make build` | Production build of the frontend |
-| `make scrape` | Download course data from counts.oxy.edu into `data/raw` (cached) and parse it into `data/parsed` (`terms=202602,202603`, `refresh=1`) |
+| `make scrape` | First download of course data from counts.oxy.edu into `data/raw` (cached, resumable) and parse it into `data/parsed` (`terms=202602,202603`) |
+| `make update` | Re-download new and changed terms, normalize, and report what `make import` would change (`terms=…`, `all=1`) |
 | `make normalize` | Group parsed data into courses, sections and professors (`data/normalized`) and write review reports (`data/reports`) |
-| `make import` | Normalize, then load the catalog into the database (upsert; safe to rerun). Needs `make db-up migrate` and `make scrape` first |
+| `make import` | Normalize, then make the database match it and write a change report to `data/reports/update` (`force=1`). Needs `make db-up migrate` and `make scrape` first |
 
 ## Dependencies
 

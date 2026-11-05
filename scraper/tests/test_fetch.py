@@ -17,34 +17,64 @@ EXCLUSIONS = [Exclusion("dept", "KINE", "test"), Exclusion("title_contains", "Cr
 
 
 class FakeSite:
-    """Answers like counts.oxy.edu for the 202603 term page and its subject lists."""
+    """Answers like counts.oxy.edu: every term shows the 202603 term page (subjects CWP, CSLC,
+    CORE, ENGL, KINE, MAC) and a subject answers with the HTML in `lists` (else an empty grid).
+    Tests change `lists`, `dropped` (subjects removed from the term page) and `terms` (the
+    term dropdown) to simulate the site being updated."""
 
-    def __init__(self, failing_subjects: set[str] | None = None) -> None:
+    def __init__(
+        self, failing_subjects: set[str] | None = None, terms: set[str] | None = None
+    ) -> None:
         self.failing_subjects = failing_subjects or set()
+        self.terms = terms  # None: the dropdown as saved in home.html
+        self.lists = {
+            "CWP": fixture_html("list_202603_CWP.html"),
+            "COMP": fixture_html("list_202602_COMP.html"),
+        }
+        self.dropped: set[str] = set()
         self.log: list[str] = []
         self.stale_once: set[str] = set()
+        self.failing_details: set[str] = set()  # CRNs whose popup keeps failing
         self.crn_for: dict[str, str] = {}
         self.topics_vary: set[str] = set()  # CRNs whose popup says "Topics vary"
+        self.description = ""  # replaces the popup's description when set
+
+    def _home(self) -> str:
+        html = fixture_html("home.html")
+        if self.terms is not None:
+            keep = self.terms
+            html = re.sub(
+                r'<option(?: selected="selected")? value="(\d{6})">[^<]*</option>',
+                lambda m: m.group(0) if m.group(1) in keep else "",
+                html,
+            )
+        return html
+
+    def _term_page(self) -> str:
+        html = fixture_html("term_202603.html")
+        for code in self.dropped:
+            html = re.sub(rf'<option value="{code}">[^<]*</option>', "", html)
+        return html
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         if request.method == "GET":
             self.log.append("home")
-            return httpx.Response(200, text=fixture_html("home.html"))
+            return httpx.Response(200, text=self._home())
         form = {
             k: v[0] for k, v in parse_qs(request.content.decode(), keep_blank_values=True).items()
         }
         target, subject = form["__EVENTTARGET"], form[SUBJECT_SELECT]
         if target == TERM_SELECT:
             self.log.append(f"term {form[TERM_SELECT]}")
-            return httpx.Response(200, text=fixture_html("term_202603.html"))
+            return httpx.Response(200, text=self._term_page())
         if GO_BUTTON in form:
             self.log.append(f"list {subject}")
             if subject in self.failing_subjects:
                 return httpx.Response(500)
-            if subject == "CWP":
-                return httpx.Response(200, text=fixture_html("list_202603_CWP.html"))
-            if subject == "COMP":
-                return httpx.Response(200, text=fixture_html("list_202602_COMP.html"))
+            if subject in self.lists:
+                html = self.lists[subject]
+                self.crn_for.update({r.event_target: r.crn for r in parse_list(soup(html))})
+                return httpx.Response(200, text=html)
             return httpx.Response(200, text=fixture_html("term_202603.html"))  # no grid
         # Detail popup: answer with the fixture popup relabelled to the CRN behind `target`.
         self.log.append(f"detail {target}")
@@ -52,9 +82,13 @@ class FakeSite:
             self.stale_once.discard(target)
             return httpx.Response(500)
         crn = self.crn_for[target]
+        if crn in self.failing_details:
+            return httpx.Response(500)
         html = fixture_html("detail_202602_2963.html").replace("<td>2963</td>", f"<td>{crn}</td>")
         if crn in self.topics_vary:
             html = re.sub(r'(id="lblCrseDesc">)[^<]*', r"\1Topics vary semester to semester.", html)
+        elif self.description:
+            html = re.sub(r'(id="lblCrseDesc">)[^<]*', rf"\1{self.description}", html)
         return httpx.Response(200, text=html)
 
 
@@ -161,3 +195,41 @@ def test_topics_vary_description_fetches_every_section(tmp_path: Path) -> None:
     for crn in lectures:
         assert fetcher.store.detail_path("202602", crn).exists()
     assert fetcher.plan_details(["202602"]) == []
+
+
+def test_details_follow_the_lists_whatever_was_saved_before(tmp_path: Path) -> None:
+    """The first section of a group is the one described, as on a fresh download; pages of rows
+    that are gone, or of a second section of the same course, are removed."""
+    site = FakeSite()
+    fetcher = make_fetcher(site, tmp_path)
+    rows = seed_comp_list(fetcher.store, site)
+    first, second = [r.crn for r in rows if r.code_raw in ("COMP 131 1", "COMP 131 2")]
+    store = fetcher.store
+    detail = fixture_html("detail_202602_2963.html")
+    store.write_html(store.detail_path("202602", second), detail.replace("2963", second))
+    store.write_html(store.detail_path("202602", "9999"), detail.replace("2963", "9999"))
+
+    fetcher.fetch_all_details(["202602"])
+
+    assert store.detail_path("202602", first).exists()
+    assert not store.detail_path("202602", second).exists()
+    assert not store.detail_path("202602", "9999").exists()
+    assert fetcher.plan_details(["202602"]) == []
+
+
+def test_topic_courses_are_recognised_from_the_reference_store(tmp_path: Path) -> None:
+    site = FakeSite()
+    main = RawStore(tmp_path / "main")
+    rows = seed_comp_list(main, site, "202601")
+    lectures = [r.crn for r in rows if r.number == "131" and not r.is_dash_lab]
+    detail = fixture_html("detail_202602_2963.html")
+    topics_vary = re.sub(r'(id="lblCrseDesc">)[^<]*', r"\1Topics vary.", detail)
+    main.write_html(main.detail_path("202601", lectures[0]), topics_vary)
+
+    client = CountsClient(transport=httpx.MockTransport(site), min_interval=0, max_attempts=1)
+    staged = Fetcher(client, RawStore(tmp_path / "staging"), EXCLUSIONS, reference=main)
+    seed_comp_list(staged.store, site, "202602")
+
+    assert ("COMP", "131") in staged.topic_numbers()
+    jobs = staged.plan_details(["202602"])
+    assert {j.crn for j in jobs} >= set(lectures)  # every COMP 131 lecture of the new term

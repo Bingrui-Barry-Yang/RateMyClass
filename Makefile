@@ -12,7 +12,7 @@ SCRAPER  := cd scraper &&
 
 .PHONY: help setup env db-up db-down db-reset dev dev-backend dev-frontend migrate migration \
         gen-api test test-backend test-scraper test-frontend lint lint-backend lint-scraper \
-        lint-frontend format build scrape normalize import
+        lint-frontend format build scrape update normalize import
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -81,16 +81,19 @@ format: ## Auto-format backend, scraper and frontend code
 	$(SCRAPER) uv run ruff check --fix . && uv run ruff format .
 	$(FRONTEND) npm run format
 
-scrape: ## Download counts.oxy.edu into data/raw (cached) and parse it: make scrape [terms=202602,202603] [refresh=1]
-	$(SCRAPER) uv run python -m oxy_scraper fetch $(if $(terms),--terms $(terms)) $(if $(refresh),--refresh)
+scrape: ## First download of counts.oxy.edu into data/raw (cached, resumable) and parse it: make scrape [terms=202602,202603]
+	$(SCRAPER) uv run python -m oxy_scraper fetch $(if $(terms),--terms $(terms))
 	$(SCRAPER) uv run python -m oxy_scraper parse $(if $(terms),--terms $(terms))
+
+update: ## Sync data/raw with the site (changed/new terms), normalize, report DB changes: make update [terms=202702] [all=1]
+	$(SCRAPER) uv run python -m oxy_scraper update $(if $(terms),--terms $(terms)) $(if $(all),--all)
 
 normalize: ## Group data/parsed into data/normalized and write review reports to data/reports
 	$(SCRAPER) uv run python -m oxy_scraper normalize
 
-import: ## Normalize data/parsed and load it into the database (run make scrape first)
+import: ## Normalize and make the database match it (reports in data/reports/update): make import [force=1]
 	$(SCRAPER) uv run python -m oxy_scraper normalize
-	$(SCRAPER) uv run python -m oxy_scraper load
+	$(SCRAPER) uv run python -m oxy_scraper load $(if $(force),--force)
 
 build: ## Production build of the frontend
 	$(FRONTEND) npm run build
