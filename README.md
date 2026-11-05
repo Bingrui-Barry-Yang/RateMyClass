@@ -48,6 +48,7 @@ When counts.oxy.edu changes (classes cancelled, moved or reassigned, description
 published):
 
 ```bash
+make migrate   # after pulling new code: apply any new database migrations first
 make update    # re-downloads new and changed terms, then reports what the import would change
 make import    # applies it; check data/reports/update/<time>/summary.txt first
 ```
@@ -56,8 +57,8 @@ make import    # applies it; check data/reports/update/<time>/summary.txt first
 re-downloads in full the terms that are new, changed, current or upcoming (a few minutes); the result
 is the same as downloading those terms again. Older terms are not checked: `all=1` checks and
 re-downloads every term the site lists (~30 min), which also picks up changes the school made to a
-past term. `terms=202702` re-downloads only the named terms. An interrupted or failed run changes nothing and
-resumes on the next run. Terms the site no longer lists are kept.
+past term. `terms=202702` re-downloads only the named terms. An interrupted or failed run changes
+nothing and resumes on the next run. Terms the site no longer lists are kept.
 
 `make import` makes the database match the data: cancelled sections are deleted, changed ones updated
 in place. It stops if a term would lose more than 20% of its sections (usually a site problem); run
@@ -72,8 +73,9 @@ in place. It stops if a term would lose more than 20% of its sections (usually a
 
 Corrections are made by hand in the committed CSV files in `scraper/overrides/`, never in the database:
 `exclusions.csv` (what to skip), `course_overrides.csv` (topic names, merges, titles, numbers reused for
-different courses, courses to keep apart or to link as "formerly") and `professor_aliases.csv` (one professor listed under several names). After editing
-them, run `make import` again (it re-runs normalize first) and check `data/reports`.
+different courses, courses to keep apart or to link as "formerly") and `professor_aliases.csv` (one
+professor listed under several names). After editing them, run `make import` again (it re-runs
+normalize first) and check `data/reports`.
 
 ## Commands
 
