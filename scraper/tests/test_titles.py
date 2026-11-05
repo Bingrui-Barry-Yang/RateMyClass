@@ -61,6 +61,8 @@ def test_slug_and_title_key() -> None:
 def test_fix_question_marks_keeps_real_questions() -> None:
     assert fix_question_marks("The White Man?s Burden") == "The White Man's Burden"
     assert fix_question_marks("the role ? if any ? of") == "the role \u2014 if any \u2014 of"
+    assert fix_question_marks("China (1550?1800)") == "China (1550\u20131800)"
+    assert slugify(fix_question_marks("China (1550?1800)")) == "china-1550-1800"
     assert fix_question_marks("What Was the Enlightenment?") == "What Was the Enlightenment?"
     assert fix_question_marks("Why This and What Else?: Criticism") == (
         "Why This and What Else?: Criticism"

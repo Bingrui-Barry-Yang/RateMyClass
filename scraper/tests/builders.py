@@ -67,7 +67,7 @@ class Term:
         return {
             "term": self.code,
             "term_label": "",
-            "subjects": {s["dept"]: s["dept"].title() for s in self.sections},
+            "subjects": {s["subject"]: s["subject"].title() for s in self.sections},
             "sections": self.sections,
             "details": self.details,
         }

@@ -2,7 +2,8 @@
 plus data/reports/*.csv for a person to review.
 
 Rules (details and examples in docs/architecture.md):
-- Excluded rows (exclusions.csv) are dropped and listed in excluded.csv.
+- Excluded rows (exclusions.csv) are dropped and listed in excluded.csv. Rows whose code does not
+  read as "DEPT NUMBER SECTION[-LAB]" are dropped and listed in unparsed_codes.csv.
 - A course is dept + number. A number is a *topics number* when a title has a topics prefix and a
   subtitle ("Special Topics in Computer Science. Deep Learning"), a description says "Topics
   (will) vary" and the number has had more than one title, or one main title appears with two
@@ -16,6 +17,9 @@ Rules (details and examples in docs/architecture.md):
 - A course that only changed its number (same department and level, terms that do not overlap,
   near-identical description, a shared professor, not a I/II pair) is merged into the newer
   number. Every number a course used is kept with its terms in `numbers`.
+- Courses kept apart but plainly connected are linked in `related`: a renumbering across levels
+  (with a shared professor) as "formerly" / "now", a keep_apart pair that passes the same-course
+  test as "see_also", and `related` overrides as "formerly" / "now".
 - "Instructor Unassigned" is not a person: such sections have no professor.
 - Titles and descriptions get the source's "?" for apostrophes and dashes repaired.
 - Dash labs ("COMP 131 1-1") join their lecture's course; lab numbers ("BIO 224L") join the base
@@ -38,8 +42,9 @@ from typing import Any
 
 from oxy_scraper.exclusions import Exclusion
 from oxy_scraper.names import PersonName, is_placeholder, maybe_same_person, parse_name
-from oxy_scraper.overrides import Overrides
+from oxy_scraper.overrides import CourseOverride, Overrides
 from oxy_scraper.store import read_json, write_csv, write_json
+from oxy_scraper.terms import term_info
 from oxy_scraper.titles import (
     fix_question_marks,
     has_topic_prefix,
@@ -55,7 +60,6 @@ TOPICS_VARY_RE = re.compile(r"\btopics (?:will )?vary\b", re.IGNORECASE)
 SERIES_SUFFIX_RE = re.compile(r"\s+(?:i{1,3}|iv|[1-4])$")  # "Conversation I" / "... II"
 RENUMBER_MIN_SIMILARITY = 0.85
 REPEATABLE_RE = re.compile(r"may be repeated for credit", re.IGNORECASE)
-SEASONS = {"01": "fall", "02": "spring", "03": "summer"}
 
 
 @dataclass
@@ -128,19 +132,6 @@ class Result:
     reports: dict[str, tuple[list[str], list[list[Any]]]] = field(default_factory=dict)
 
 
-def term_info(code: str) -> dict[str, Any]:
-    """202601 -> 2025 Fall (YYYY is the year the academic year ends)."""
-    end, season = int(code[:4]), SEASONS[code[4:]]
-    year = end - 1 if season == "fall" else end
-    return {
-        "code": code,
-        "label": f"{year} {season.title()}",
-        "year": year,
-        "season": season,
-        "academic_year": f"{end - 1}-{str(end)[2:]}",
-    }
-
-
 def most_common(values: Iterable[Any]) -> Any:
     counts = Counter(v for v in values if v is not None)
     return counts.most_common(1)[0][0] if counts else None
@@ -155,10 +146,15 @@ class Normalizer:
         self.overrides = overrides
         self.rows: list[Row] = []
         self.excluded: list[list[Any]] = []
+        self.unparsed: list[list[Any]] = []
         self.assigned: dict[tuple[str, str], Assignment] = {}
         self.unmatched_labs: list[list[Any]] = []
         self.topic_reasons: dict[tuple[str, str], str] = {}  # why a number was split
         self.renumbered: list[list[Any]] = []
+        # Linked courses: {"a", "b", "kind": "formerly" (a came before b) | "see_also", ...}.
+        self.relations: list[dict[str, Any]] = []
+        # Overrides that point at nothing (the source changed since they were written).
+        self.stale_overrides: list[list[Any]] = []
         self.evidence_merges: list[list[Any]] = []
         self._topic_slugs: dict[tuple[str, str], str] = {}  # (base, title_key) -> slug
 
@@ -193,6 +189,7 @@ class Normalizer:
         result.professors, suspects = self._professors()
         result.reports = {
             "excluded": (["term", "crn", "code", "title", "rule"], self.excluded),
+            "unparsed_codes": (["term", "crn", "code", "title"], self.unparsed),
             "unmatched_labs": (
                 ["term", "crn", "code", "title", "course_key", "reason"],
                 self.unmatched_labs,
@@ -216,6 +213,14 @@ class Normalizer:
                 self.renumbered,
             ),
             "professor_suspects": suspects,
+            "related_courses": (
+                ["key", "related_key", "relation", "source", "similarity", "shared_professors"],
+                self._relation_rows(),
+            ),
+            "stale_overrides": (
+                ["action", "term", "crn", "course_key", "value", "problem"],
+                self.stale_overrides,
+            ),
             "cross_lists": self._cross_list_report(groups),
             "all_sections": self._all_sections_report(result),
             "all_courses": self._all_courses_report(result),
@@ -238,6 +243,17 @@ class Normalizer:
                 if rule:
                     self.excluded.append(
                         [d["term"], record["crn"], record["code_raw"], record["title"], rule.note]
+                    )
+                    continue
+                if not (record["dept"] and record["number"] and record["section"]):
+                    log.warning(
+                        "%s CRN %s: cannot read code %r, skipped",
+                        d["term"],
+                        record["crn"],
+                        record["code_raw"],
+                    )
+                    self.unparsed.append(
+                        [d["term"], record["crn"], record["code_raw"], record["title"]]
                     )
                     continue
                 crn = record["detail_crn"]
@@ -289,6 +305,7 @@ class Normalizer:
         self, by_number: dict[tuple[str, str], list[Row]], topics: set[tuple[str, str]]
     ) -> None:
         set_topics = self.overrides.topics()
+        used_topics: set[tuple[str, str]] = set()
         for (dept, number), rows in by_number.items():
             base = f"{dept}-{number}"
             if (dept, number) not in topics:
@@ -302,6 +319,8 @@ class Normalizer:
             for row in rows:
                 main, sub = split_title(row.title)
                 name = set_topics.get((row.term, row.crn)) or (row.title if whole else sub)
+                if (row.term, row.crn) in set_topics:
+                    used_topics.add((row.term, row.crn))
                 if not name and not has_topic_prefix(row.title) and title_key(main) not in mains:
                     name = row.title  # a plain title under a topics number ("Directed Research")
                 if name:
@@ -313,6 +332,17 @@ class Normalizer:
                     suffix = people or f"{row.term}-{row.crn}"
                     a = Assignment(f"{base}-untitled-{suffix}", untitled=True)
                 self.assigned[(row.term, row.crn)] = a
+        for o in self.overrides.courses:
+            if o.action == "set_topic" and (o.term, o.crn) not in used_topics:
+                self._stale(o, "no such section in a topics number")
+        known = {d for d, _ in by_number} | {f"{d}-{n}" for d, n in by_number}
+        for o in self.overrides.courses:
+            if o.action == "split_by_title" and o.course_key not in known:
+                self._stale(o, "no such department or number")
+
+    def _stale(self, o: CourseOverride, problem: str) -> None:
+        log.warning("course_overrides.csv: %s %s: %s", o.action, o.course_key or o.crn, problem)
+        self.stale_overrides.append([o.action, o.term, o.crn, o.course_key, o.value, problem])
 
     def _topic_key(self, base: str, name: str) -> str:
         """Key of a topic under `base`. Names that are equal either as slugs or as title keys
@@ -379,17 +409,52 @@ class Normalizer:
             )
 
     def _apply_merges(self) -> None:
-        merges = self.overrides.merges()
+        """merge_into, set_title and keep_apart overrides whose courses no longer exist are
+        listed in stale_overrides.csv and otherwise ignored."""
         keys = {a.course_key for a in self.assigned.values()}
-        for source, target in merges.items():
-            if source not in keys:
-                raise ValueError(f"course_overrides.csv: merge_into from unknown key {source!r}")
-            if target not in keys and target not in merges:
-                raise ValueError(f"course_overrides.csv: merge_into unknown key {target!r}")
+        wanted = self.overrides.merges()
+        merges = {}
+        for o in self.overrides.courses:
+            if o.action != "merge_into":
+                continue
+            if o.course_key not in keys:
+                self._stale(o, "merge_into from a course that does not exist")
+            elif o.value not in keys and o.value not in wanted:
+                self._stale(o, "merge_into a course that does not exist")
+            else:
+                merges[o.course_key] = o.value
         self._remap(merges)
-        unknown = set(self.overrides.titles()) - {a.course_key for a in self.assigned.values()}
-        if unknown:
-            raise ValueError(f"course_overrides.csv: set_title for unknown keys {sorted(unknown)}")
+        keys = {a.course_key for a in self.assigned.values()}
+        for o in self.overrides.courses:
+            if o.action == "set_title" and o.course_key not in keys:
+                self._stale(o, "set_title for a course that does not exist")
+            if o.action == "keep_apart" and not {o.course_key, o.value} <= keys:
+                self._stale(o, "keep_apart names a course that does not exist")
+            if o.action == "related":
+                if {o.course_key, o.value} <= keys:
+                    self._relate(o.course_key, o.value, "formerly", "related override")
+                else:
+                    self._stale(o, "related names a course that does not exist")
+
+    def _relate(
+        self,
+        a: str,
+        b: str,
+        kind: str,
+        source: str,
+        ratio: float | None = None,
+        shared: list[str] | None = None,
+    ) -> None:
+        self.relations.append(
+            {
+                "a": a,
+                "b": b,
+                "kind": kind,
+                "source": source,
+                "similarity": "" if ratio is None else round(ratio, 2),
+                "shared": " ".join(shared or []),
+            }
+        )
 
     def _course_info(self) -> dict[str, dict[str, Any]]:
         """Per course key, the facts the same-course checks compare (lecture rows only)."""
@@ -411,11 +476,43 @@ class Normalizer:
         return info
 
     def _remap(self, merges: dict[str, str]) -> None:
-        for a in self.assigned.values():
+        def final(key: str) -> str:
             seen = set()
-            while a.course_key in merges and a.course_key not in seen:
-                seen.add(a.course_key)
-                a.course_key = merges[a.course_key]
+            while key in merges and key not in seen:
+                seen.add(key)
+                key = merges[key]
+            return key
+
+        for a in self.assigned.values():
+            a.course_key = final(a.course_key)
+        for r in self.relations:
+            r["a"], r["b"] = final(r["a"]), final(r["b"])
+
+    def _related(self) -> dict[str, list[dict[str, str]]]:
+        """Course key -> the courses linked to it, as stored in `related`."""
+        links: dict[str, set[tuple[str, str]]] = defaultdict(set)
+        for r in self.relations:
+            a, b = r["a"], r["b"]
+            if a == b:
+                continue
+            if r["kind"] == "formerly":  # a came before b
+                links[a].add(("now", b))
+                links[b].add(("formerly", a))
+            else:
+                links[a].add(("see_also", b))
+                links[b].add(("see_also", a))
+        return {
+            k: [{"key": key, "relation": rel} for rel, key in sorted(v)] for k, v in links.items()
+        }
+
+    def _relation_rows(self) -> list[list[Any]]:
+        rows = [
+            [r["a"], r["b"], r["kind"], r["source"], r["similarity"], r["shared"]]
+            for r in self.relations
+            if r["a"] != r["b"]
+        ]
+        unique = {tuple(str(x) for x in r): r for r in rows}
+        return [unique[k] for k in sorted(unique)]
 
     def _merge_same_course(self) -> None:
         """Two topics of one number (or of one department-wide split_by_title department) are
@@ -438,13 +535,16 @@ class Normalizer:
             for ka, kb in combinations(sorted(set(keys)), 2):
                 a, b = info[ka], info[kb]
                 shared = sorted(a["people"] & b["people"])
-                if not shared or frozenset((ka, kb)) in apart:
+                if not shared:
                     continue
                 matcher = difflib.SequenceMatcher(None, a["text"], b["text"])
                 if matcher.quick_ratio() < RENUMBER_MIN_SIMILARITY:
                     continue
                 ratio = matcher.ratio()
                 if ratio < RENUMBER_MIN_SIMILARITY:
+                    continue
+                if frozenset((ka, kb)) in apart:
+                    self._relate(ka, kb, "see_also", "keep_apart", ratio, shared)
                     continue
                 if max(a["terms"]) > max(b["terms"]):
                     ka, kb = kb, ka  # merge the older into the newer
@@ -470,8 +570,6 @@ class Normalizer:
                 a, b = info[ka], info[kb]
                 if a["numbers"] & b["numbers"] or a["terms"] & b["terms"]:
                     continue
-                if frozenset((ka, kb)) in apart:
-                    continue
                 matcher = difflib.SequenceMatcher(None, a["text"], b["text"])
                 if matcher.quick_ratio() < RENUMBER_MIN_SIMILARITY:
                     continue
@@ -487,9 +585,15 @@ class Normalizer:
                 shared = sorted(a["people"] & b["people"])
                 if series:
                     continue  # "Conversation I" / "Conversation II" are two courses
+                if frozenset((ka, kb)) in apart:
+                    if shared:
+                        self._relate(ka, kb, "see_also", "keep_apart", ratio, shared)
+                    continue
                 reason = ""
                 if len(levels) > 1:
                     reason = "different course levels: kept apart"
+                    if shared:
+                        self._relate(ka, kb, "formerly", "renumbered across levels", ratio, shared)
                 elif not shared:
                     reason = "no shared professor: kept apart"
                 else:
@@ -520,6 +624,7 @@ class Normalizer:
         for row in self.rows:
             by_key[self.assigned[(row.term, row.crn)].course_key].append(row)
         titles = self.overrides.titles()
+        related = self._related()
         courses, title_changes, description_changes, topic_rows = [], [], [], []
         topic_descriptions: dict[str, str] = {}
         for key in sorted(by_key):
@@ -560,6 +665,7 @@ class Normalizer:
                     "repeatable": any(
                         REPEATABLE_RE.search(x) for x in detail.get("restrictions", [])
                     ),
+                    "related": related.get(key, []),
                 }
             )
             if is_topic:
