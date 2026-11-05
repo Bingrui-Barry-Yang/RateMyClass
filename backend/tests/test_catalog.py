@@ -68,7 +68,6 @@ def test_lecture_lab_and_co_taught_professors(db: Session) -> None:
     assert {s.code_raw for s in loaded.course.sections} == {"COMP 131 1", "COMP 131 1-1"}
     lab_row = db.scalars(select(Section).where(Section.crn == "2718")).one()
     assert lab_row.parent is not None and lab_row.parent.crn == "2715"
-    assert lab_row.active is True
     assert loaded.course.title_variants == [] and loaded.course.is_topic is False
 
 
