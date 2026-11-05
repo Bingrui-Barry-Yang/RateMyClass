@@ -60,7 +60,7 @@ def build_term(store: RawStore, term: str) -> tuple[dict[str, Any], TermSummary]
     if store.terms_path().exists():
         label = next((t["label"] for t in read_json(store.terms_path()) if t["code"] == term), "")
     details: dict[str, Detail] = {}
-    for path in sorted((store.root / term / "detail").glob("*.html.gz")):
+    for path in store.detail_paths(term):
         detail = parse_detail(soup(store.read_html(path)))
         if detail is None:
             raise ValueError(f"{path}: no detail popup")

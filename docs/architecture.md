@@ -66,13 +66,14 @@ Filled by the scraper's import step; the API only reads them.
 | --- | --- | --- |
 | `departments` | `code` | `COMP` / Computer Science |
 | `terms` | `code` | `202602`; `year` and `season` (fall/spring/summer) |
-| `courses` | `key` | `COMP-131`, or one topic of a topics course (`COMP-395-deep-learning`); latest description plus `description_history` |
+| `courses` | `key` | `COMP-131`, or one topic of a topics course (`COMP-395-deep-learning`); latest description plus `description_history`; `related` links courses kept apart but connected (`formerly` / `now` / `see_also`) |
 | `sections` | `(term_id, crn)` | one listed row: `kind` lecture/lab, dash labs point at their lecture (`parent_section_id`), `cross_list_group` links copies listed under several departments |
 | `professors` | `key` | `camarillo-abad-hector-miguel` |
 | `section_professors` | `(section_id, professor_id)` | co-teachers in listed order (`position`) |
 
-Rows missing from a later import get `active = false` rather than being deleted, because reviews
-reference sections and professors.
+The tables mirror the source: an import deletes sections the site no longer lists (cancelled
+classes), and courses, professors and departments left without sections. A section that changes
+(time, professors, course) keeps its row and id. Terms are never deleted.
 
 ## Scraper
 
@@ -80,9 +81,11 @@ reference sections and professors.
 scraper/oxy_scraper/
 ├── client.py      CountsClient: WebForms postbacks, >=1 s between requests, retry/backoff
 ├── fetch.py       Step 1: list + detail pages -> data/raw (cached, resumable)
+├── sync.py        `update`: re-download changed and new terms via data/raw/.staging
+├── terms.py       Term codes (YYYYTT), seasons, the current term
 ├── parsed.py      Step 2: data/raw -> data/parsed/<term>.json (offline)
 ├── normalize.py   Step 3: data/parsed + overrides -> data/normalized/*.json + data/reports/*.csv
-├── load.py        Step 4: data/normalized -> Postgres catalog tables (upsert, one transaction)
+├── load.py        Step 4: data/normalized -> Postgres catalog tables (diff + apply, one transaction)
 ├── parse.py       HTML -> rows and details (pure functions, tested against saved fixtures)
 ├── titles.py      "Main: Subtitle" splitting, slugs, abbreviation-insensitive title comparison
 ├── names.py       Professor names and keys ("camarillo-abad-hector-miguel")
@@ -98,8 +101,22 @@ only for subjects in that term's own dropdown (empty subjects make the server re
 Detail popups are fetched once per term per (dept, number, title), so description changes are
 kept; for topic courses ("Special Topics"/"Topics in" titles, or "Topics vary" in a
 description) every section in every term is fetched. Labs listed under a lecture ("COMP 131 1-1")
-are grouped by their own title, because some departments give them their own description. The
-fetcher stops after 5 failures in a row; rerunning resumes where it stopped.
+are grouped by their own title, because some departments give them their own description. Which
+popups a term has depends only on its lists (the first section of each group), so missing ones
+are fetched and unwanted ones deleted. The fetcher stops after 5 failures in a row; rerunning
+resumes where it stopped.
+
+`update` keeps data/raw identical to a fresh download. By default it checks the current academic
+year and later plus terms new on the site (`--all`: every listed term; `--terms`: the named ones).
+It downloads their lists into `data/raw/.staging` and re-downloads a term in full (lists and
+popups) when it is new, its lists differ from the saved ones (compared as parsed rows), it is the
+current or a later term (an upcoming course can change only its description), it is named with
+`--terms`, or with `--all`. A staged term replaces the saved one only when it is
+complete; a failed run leaves data/raw untouched and resumes from the staging area. Afterwards
+the popups of all terms are reconciled, because a change can make a number a topics number in
+every term. Terms the site no longer lists are kept. Every term is then re-parsed and normalized,
+and the import diff is reported. Without `--all`, changes to terms of earlier academic years are
+not looked for.
 
 The parse step writes one JSON file per term: every listed row as shown (instructors with full
 names, meetings, core, seats) plus the parsed popups keyed by CRN (description, restrictions,
@@ -133,27 +150,38 @@ The normalize step (`make normalize`) decides what a course is:
   titles (`Urban Fictions` / `Urban Fictions: The Modern City in Literature...`).
 - A course's description is its latest term's text; every change is kept in
   `description_history`.
+- Courses kept apart but plainly connected are linked in `related`, so a page can say "Formerly
+  ARTS 100" and link the old course, while each keeps its own reviews: a renumbering across levels
+  with a shared professor (`formerly` on the newer course, `now` on the older), a `keep_apart`
+  pair that still passes the same-course test (`see_also`), and `related` overrides for changes
+  the rules cannot see. Listed in `related_courses`.
 - Cross-listed sections share a `cross_list_group`: same term, same professors, same meeting
   time, at least two departments. Sections without a time (directed research) are not grouped.
 - The source writes curly apostrophes and dashes as `?` (`Man?s`); normalize restores them.
 
 `scraper/overrides/` holds the reviewed corrections: `exclusions.csv`, `course_overrides.csv`
-(`set_topic`, `merge_into`, `set_title`, `split_by_title`, `keep_apart`) and
+(`set_topic`, `merge_into`, `set_title`, `split_by_title`, `keep_apart`, `related`) and
 `professor_aliases.csv`. Bad
-rows or unknown keys stop the run. `data/reports/` lists what a person should look at:
+rows stop the run; overrides that point at a section or course the data no longer has are
+listed in `stale_overrides` and ignored. `data/reports/` lists what a person should look at:
 `topic_courses` (why a number was split, the sibling with the most similar title and one with
 the same description), `title_changes`, `description_changes`, `evidence_merges`, `renumbered`
 (merged and
 rejected renumbering candidates), `professor_suspects`, `cross_lists`, `unmatched_labs`,
-`excluded`, `all_sections` (every section on one row with course title and professor names,
+`excluded`, `unparsed_codes` (rows whose code could not be read; `BIO 130 3.1` reads as a lab
+like `3-1`), `related_courses`, `stale_overrides`, `all_sections` (every section on one row with course title and professor names,
 for spot checks in a spreadsheet) and `all_courses` (the same grouped by course: numbers with
 terms, professors, listed titles, description).
 
-The load step (`make import` = normalize + load) upserts on natural keys: term code, department
-code, course key, professor key, and term + CRN (CRNs are reused across terms). Loading twice
-changes nothing. Courses, professors and sections missing from the data get `active = false`
-and come back when listed again; each loaded section's professors are replaced by the listed
-ones. The whole load is one transaction. Scraper tests that touch the database (and the backend
+The load step (`make import` = normalize + load) makes the database match `data/normalized`,
+matching rows on natural keys: term code, department code, course key, professor key, and term +
+CRN (CRNs are reused across terms). It first compares field by field and writes the changes to
+`data/reports/update/<time>/` (`summary.txt`, sections added/removed/changed, `course_moves`
+for sections that moved to another course, courses, professors and departments added/removed/
+changed), then inserts, updates and deletes; importing into old data ends in the same rows as
+importing into an empty database. It refuses to delete more than 20% of a term's sections
+(`--max-removed`) unless forced, because a site outage looks like mass cancellation. Loading
+twice changes nothing. The whole load is one transaction. Scraper tests that touch the database (and the backend
 `db` fixture) empty the catalog tables inside a rolled-back transaction, so a local database
 keeps its imported data; CI gives the `scraper` job its own Postgres.
 

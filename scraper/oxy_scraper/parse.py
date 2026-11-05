@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from bs4 import BeautifulSoup, Tag
 
 # "COMP 131 1-2" -> dept, number, section, lab section. Numbers may carry a suffix ("BIO 224L").
-CODE_RE = re.compile(r"^(?P<dept>[A-Z]+) (?P<number>\w+) (?P<section>\w+)(?:-(?P<lab>\w+))?$")
+# The lab is usually after "-"; the site has also listed one as "BIO 130 3.1".
+CODE_RE = re.compile(r"^(?P<dept>[A-Z]+) (?P<number>\w+) (?P<section>\w+)(?:[-.](?P<lab>\w+))?$")
 POSTBACK_RE = re.compile(r"__doPostBack\('([^']+)'")
 
 

@@ -1,4 +1,5 @@
 from oxy_scraper.parse import (
+    CODE_RE,
     Prerequisite,
     ReservedSeats,
     detail_crn,
@@ -113,3 +114,9 @@ def test_to_int_keeps_negative_counts() -> None:
     assert to_int("-2") == -2  # overfilled reserved seats
     assert to_int("") is None
     assert to_int("TBA") is None
+
+
+def test_code_with_a_dot_before_the_lab() -> None:
+    m = CODE_RE.match("BIO 130 3.1")
+    assert m and (m["dept"], m["number"], m["section"], m["lab"]) == ("BIO", "130", "3", "1")
+    assert CODE_RE.match("COMP 131 1-2") and not CODE_RE.match("BIO 130")

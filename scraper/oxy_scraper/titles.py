@@ -13,13 +13,17 @@ LAB_SUFFIX_RE = re.compile(r"\s+(laboratory|lab)$", re.IGNORECASE)
 WORD_FORMS = {"sci": "science", "lab": "laboratory", "intro": "introduction"}
 
 
-# The source turns curly quotes and dashes into "?": "Man?s Burden", "the role ? if any ? of".
+# The source turns curly quotes and dashes into "?": "Man?s Burden", "the role ? if any ? of",
+# "(1550?1800)".
 APOSTROPHE_RE = re.compile(r"(?<=[A-Za-z])\?(?=[a-z])")
 DASH_RE = re.compile(r" \? ")
+RANGE_DASH_RE = re.compile(r"(?<=\d)\?(?=\d)")
 
 
 def fix_question_marks(text: str) -> str:
-    return DASH_RE.sub(" \u2014 ", APOSTROPHE_RE.sub("'", text))
+    text = APOSTROPHE_RE.sub("'", text)
+    text = RANGE_DASH_RE.sub("\u2013", text)
+    return DASH_RE.sub(" \u2014 ", text)
 
 
 def split_title(title: str) -> tuple[str, str | None]:
@@ -51,6 +55,7 @@ def ascii_fold(text: str) -> str:
 
 def slugify(text: str) -> str:
     """Lowercase ASCII words joined by hyphens: "Art & Money: II" -> art-and-money-ii."""
+    text = re.sub(r"[\u2013\u2014]", " ", text)  # en/em dashes separate words (1550-1800)
     text = ascii_fold(text).lower().replace("&", " and ")
     return re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 

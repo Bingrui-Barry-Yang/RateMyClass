@@ -2,21 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from oxy_scraper.normalize import term_info, write_result
+from oxy_scraper.normalize import write_result
 from oxy_scraper.overrides import CourseOverride, Overrides, load_overrides
 
 from .builders import WALSH, Term, courses, run, sections
-
-
-def test_term_info() -> None:
-    assert term_info("202601") == {
-        "code": "202601",
-        "label": "2025 Fall",
-        "year": 2025,
-        "season": "fall",
-        "academic_year": "2025-26",
-    }
-    assert term_info("202603")["label"] == "2026 Summer"
 
 
 def test_special_topics_split_by_subtitle_and_merge_across_spellings() -> None:
@@ -223,11 +212,31 @@ def test_overrides() -> None:
     assert [p["key"] for p in result.professors] == ["walsh-joel-anderson"]
 
 
-def test_unknown_merge_key_is_an_error() -> None:
+def test_overrides_pointing_at_nothing_are_reported_not_fatal() -> None:
+    """The source can drop a section or course an override was written for."""
     t = Term("202102").add("1", "COMP 131 1", "Fundamentals of Computer Science")
-    bad = Overrides(courses=[CourseOverride("merge_into", "", "", "COMP-999", "COMP-131", "")])
-    with pytest.raises(ValueError, match="COMP-999"):
-        run(t, overrides=bad)
+    stale = Overrides(
+        courses=[
+            CourseOverride("merge_into", "", "", "COMP-999", "COMP-131", ""),
+            CourseOverride("merge_into", "", "", "COMP-131", "COMP-998", ""),
+            CourseOverride("set_title", "", "", "COMP-997", "Gone", ""),
+            CourseOverride("set_topic", "202102", "77", "", "Gone", ""),
+            CourseOverride("split_by_title", "", "", "XYZ", "", ""),
+            CourseOverride("keep_apart", "", "", "COMP-131", "COMP-996", ""),
+        ]
+    )
+    result = run(t, overrides=stale)
+
+    assert set(courses(result)) == {"COMP-131"}
+    _, rows = result.reports["stale_overrides"]
+    assert [r[0] for r in rows] == [
+        "set_topic",
+        "split_by_title",
+        "merge_into",
+        "merge_into",
+        "set_title",
+        "keep_apart",
+    ]
 
 
 def test_professors_and_suspects() -> None:
@@ -435,3 +444,91 @@ def test_topic_spellings_that_differ_by_abbreviation_share_a_key() -> None:
         .add("4", "COMP 395 2", "Special Topics in Computer Science: Other Realities")
     )
     assert set(courses(run(t, t2))) == {"COMP-395-intro-to-data-sci", "COMP-395-other-realities"}
+
+
+def test_dot_lab_joins_its_lecture_and_unreadable_codes_are_reported() -> None:
+    t = (
+        Term("202702")
+        .add("1", "BIO 130 3", "Introductory Biology")
+        .add("2", "BIO 130 3.1", "Introductory Biology Laboratory")
+    )
+    t.sections.append(
+        {
+            **t.sections[0],
+            "crn": "3",
+            "code_raw": "BIO 130",
+            "dept": None,
+            "number": None,
+            "section": None,
+            "lab_section": None,
+        }
+    )
+    result = run(t)
+
+    lab = sections(result)[("202702", "BIO 130 3.1")]
+    assert (lab["course_key"], lab["kind"], lab["parent_crn"]) == ("BIO-130", "lab", "1")
+    assert result.reports["unparsed_codes"][1] == [
+        ["202702", "3", "BIO 130", "Introductory Biology"]
+    ]
+    assert set(courses(result)) == {"BIO-130"}
+
+
+def test_connected_courses_kept_apart_are_linked() -> None:
+    level = (
+        Term("202102").add("1", "AMST 233 0", "American Queer Novel", description=LONG),
+        Term("202401").add("2", "AMST 333 0", "American Queer Novel", description=LONG),
+    )
+    sister = (
+        Term("202602").add("5", "SOC 225 0", "Masculinities", description=LONG),
+        Term("202702").add("6", "SOC 226 0", "Masculinities in Latin America", description=LONG),
+    )
+    other_teacher = (
+        Term("202102").add("7", "ENGL 110 0", "Black Holes in Fiction", description=LONG),
+        Term("202401").add(
+            "8",
+            "ENGL 310 0",
+            "Black Holes in Fiction",
+            description=LONG,
+            profs=(("Ann Lee", "Lee,A"),),
+        ),
+    )
+    chain = (
+        Term("202101").add("9", "ARTS 100 0", "Collaborate Workshop"),
+        Term("202301").add("10", "ARTS 101 0", "Community Studio"),
+    )
+    overrides = Overrides(
+        courses=[
+            CourseOverride("keep_apart", "", "", "SOC-225", "SOC-226", ""),
+            CourseOverride("related", "", "", "ARTS-100", "ARTS-101", ""),
+        ]
+    )
+    result = run(*level, *sister, *other_teacher, *chain, overrides=overrides)
+    c = courses(result)
+
+    assert c["AMST-233"]["related"] == [{"key": "AMST-333", "relation": "now"}]
+    assert c["AMST-333"]["related"] == [{"key": "AMST-233", "relation": "formerly"}]
+    assert c["SOC-226"]["related"] == [{"key": "SOC-225", "relation": "see_also"}]
+    assert c["ENGL-110"]["related"] == []  # no shared professor: not linked
+    assert c["ARTS-101"]["related"] == [{"key": "ARTS-100", "relation": "formerly"}]
+    sources = {(r[0], r[1]): r[3] for r in result.reports["related_courses"][1]}
+    assert sources == {
+        ("AMST-233", "AMST-333"): "renumbered across levels",
+        ("SOC-225", "SOC-226"): "keep_apart",
+        ("ARTS-100", "ARTS-101"): "related override",
+    }
+
+
+def test_links_follow_later_merges_and_stale_related_is_reported() -> None:
+    t = (
+        Term("202102").add("1", "AMST 233 0", "American Queer Novel", description=LONG),
+        Term("202401").add("2", "AMST 333 0", "American Queer Novel", description=LONG),
+    )
+    overrides = Overrides(
+        courses=[
+            CourseOverride("merge_into", "", "", "AMST-233", "AMST-333", ""),
+            CourseOverride("related", "", "", "AMST-999", "AMST-333", ""),
+        ]
+    )
+    result = run(*t, overrides=overrides)
+    assert courses(result)["AMST-333"]["related"] == []  # merged: one course, no self-link
+    assert [r[0] for r in result.reports["stale_overrides"][1]] == ["related"]

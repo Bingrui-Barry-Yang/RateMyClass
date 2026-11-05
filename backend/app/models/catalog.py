@@ -1,8 +1,9 @@
 """Course catalog imported from counts.oxy.edu by the scraper (scraper/oxy_scraper/load.py).
 
 Rows are matched on natural keys (department code, term code, course key, professor key,
-term + CRN), so re-importing updates rows in place. Rows that disappear from the source are
-marked `active = false` instead of deleted, because reviews will reference them.
+term + CRN), so re-importing updates rows in place. The tables mirror the source: a section the
+site no longer lists (a cancelled class) is deleted, and so are courses, professors and
+departments left without sections. Terms are never deleted.
 """
 
 from typing import Any
@@ -72,7 +73,11 @@ class Course(Base):
     prerequisites: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list)
     corequisites: Mapped[str | None] = mapped_column(Text)
     repeatable: Mapped[bool] = mapped_column(Boolean, default=False)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    # Courses kept apart but connected: [{"key": "ARTS-100-...", "relation": "formerly"}] with
+    # relation "formerly" (the other course came before this one), "now" or "see_also".
+    related: Mapped[list[dict[str, str]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb")
+    )
 
     department: Mapped[Department] = relationship(back_populates="courses")
     sections: Mapped[list["Section"]] = relationship(back_populates="course")
@@ -86,7 +91,6 @@ class Professor(Base):
     display_name: Mapped[str] = mapped_column(String(200))
     first_name: Mapped[str] = mapped_column(String(100))
     last_name: Mapped[str] = mapped_column(String(100))
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     sections: Mapped[list["SectionProfessor"]] = relationship(back_populates="professor")
 
@@ -118,7 +122,6 @@ class Section(Base):
     core: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list)
     # Same id for the copies of one class listed under several departments.
     cross_list_group: Mapped[str | None] = mapped_column(String(100), index=True)
-    active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     term: Mapped[Term] = relationship()
     course: Mapped[Course] = relationship(back_populates="sections")

@@ -4,6 +4,7 @@ data/raw/terms.json                      term dropdown: [{"code", "label"}], new
 data/raw/<term>/meta.json                per-subject row counts, skipped and failed subjects
 data/raw/<term>/list/<SUBJECT>.html.gz   results grid for one subject (its form state is replayed)
 data/raw/<term>/detail/<CRN>.html.gz     detail popup (__VIEWSTATE blanked to save space)
+data/raw/.staging/<term>/...             same layout; a term `update` is re-downloading
 """
 
 import csv
@@ -94,11 +95,22 @@ class RawStore:
     def save_meta(self, meta: TermMeta) -> None:
         write_json(self.meta_path(meta.term), meta.__dict__)
 
+    def detail_paths(self, term: str) -> list[Path]:
+        return sorted((self.root / term / "detail").glob("*.html.gz"))
+
+    def term_dir(self, term: str) -> Path:
+        return self.root / term
+
     def cached_terms(self) -> list[str]:
-        """Terms with at least one saved list, newest first."""
+        """Terms with at least one saved list, newest first (`.staging` and other dot folders
+        are not terms)."""
         if not self.root.exists():
             return []
-        terms = [p.name for p in self.root.iterdir() if (p / "list").is_dir()]
+        terms = [
+            p.name
+            for p in self.root.iterdir()
+            if not p.name.startswith((".", "_")) and (p / "list").is_dir()
+        ]
         return sorted(terms, reverse=True)
 
     def cached_subjects(self, term: str) -> list[str]:
