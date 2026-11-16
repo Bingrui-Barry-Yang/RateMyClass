@@ -1,20 +1,24 @@
 """Read-only pages data: departments, courses, professors and their reviews.
 
 Paths use natural keys (department code, course key, professor key, term code). Unknown keys
-return 404 (services raise NotFoundError).
+return 404 (services raise NotFoundError). The full lists (departments, courses, professors)
+behind the type-to-match pickers carry an ETag: matching happens in the browser.
 """
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.orm import Session
 
+from app.api.caching import cached_json
 from app.db.session import get_db
 from app.schemas.catalog import (
     CourseDetail,
+    CourseIndexItem,
     CourseListItem,
     DepartmentOut,
     ProfessorDetail,
+    ProfessorIndexItem,
     ProfessorListItem,
 )
 from app.schemas.reviews import ReviewPage
@@ -28,9 +32,19 @@ Offset = Annotated[int, Query(ge=0)]
 TermCode = Annotated[str | None, Query(description='Term code, e.g. "202602"')]
 
 
-@router.get("/departments")
-def list_departments(db: Db) -> list[DepartmentOut]:
-    return catalog.list_departments(db)
+@router.get("/departments", response_model=list[DepartmentOut])
+def list_departments(db: Db, request: Request) -> Response:
+    return cached_json(request, catalog.list_departments(db))
+
+
+@router.get("/courses", response_model=list[CourseIndexItem])
+def list_courses(db: Db, request: Request) -> Response:
+    return cached_json(request, catalog.course_index(db))
+
+
+@router.get("/professors", response_model=list[ProfessorIndexItem])
+def list_professors(db: Db, request: Request) -> Response:
+    return cached_json(request, catalog.professor_index(db))
 
 
 @router.get("/departments/{code}/courses")

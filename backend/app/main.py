@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
@@ -28,6 +29,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(api_router, prefix=settings.api_prefix)
     app.add_exception_handler(NotFoundError, _not_found)
+    # JSON compresses to about a fifth; small responses are not worth it.
+    app.add_middleware(GZipMiddleware, minimum_size=1000)
     return app
 
 

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, aliased
 from app.models import Course, Department, Professor, Section, SectionProfessor, Term
 from app.schemas.catalog import (
     CourseDetail,
+    CourseIndexItem,
     CourseListItem,
     CourseProfessor,
     CrossListedCourse,
@@ -22,6 +23,7 @@ from app.schemas.catalog import (
     DepartmentRef,
     ProfessorCourse,
     ProfessorDetail,
+    ProfessorIndexItem,
     ProfessorListItem,
     RelatedCourseOut,
     TermRef,
@@ -98,6 +100,48 @@ def list_departments(session: Session) -> list[DepartmentOut]:
             professor_count=professors.get(d.id, 0),
         )
         for d in session.scalars(select(Department).order_by(Department.code))
+    ]
+
+
+def course_index(session: Session) -> list[CourseIndexItem]:
+    """Every course, light enough to send whole: by department, then number."""
+    rows = session.execute(
+        select(Course.key, Department.code, Course.number, Course.title, Course.numbers).join(
+            Course.department
+        )
+    )
+    items = [
+        CourseIndexItem(
+            key=key,
+            dept=dept,
+            number=number,
+            title=title,
+            former_numbers=list(
+                dict.fromkeys(n["number"] for n in numbers if n["number"] != number)
+            ),
+        )
+        for key, dept, number, title, numbers in rows
+    ]
+    return sorted(items, key=lambda c: (c.dept, _number_order(c.number), c.key))
+
+
+def professor_index(session: Session) -> list[ProfessorIndexItem]:
+    """Every professor with the departments they taught in: by last name."""
+    taught: dict[int, set[str]] = defaultdict(set)
+    for professor_id, dept in session.execute(
+        select(SectionProfessor.professor_id, Department.code)
+        .join(Section, Section.id == SectionProfessor.section_id)
+        .join(Course, Course.id == Section.course_id)
+        .join(Department, Department.id == Course.department_id)
+        .distinct()
+    ):
+        taught[professor_id].add(dept)
+    professors = session.scalars(
+        select(Professor).order_by(Professor.last_name, Professor.first_name, Professor.key)
+    )
+    return [
+        ProfessorIndexItem(key=p.key, display_name=p.display_name, departments=sorted(taught[p.id]))
+        for p in professors
     ]
 
 

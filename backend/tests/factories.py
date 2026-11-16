@@ -5,6 +5,7 @@ from collections.abc import Sequence
 from itertools import count
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -29,6 +30,10 @@ class Factory:
         self._tokens = count(1)
 
     def term(self, code: str) -> Term:
+        if code not in self.terms:  # made by another Factory on the same session?
+            found = self.db.scalars(select(Term).where(Term.code == code)).one_or_none()
+            if found is not None:
+                self.terms[code] = found
         if code not in self.terms:
             season = SEASONS[code[4:]]
             year = int(code[:4]) - (season == "fall")
@@ -38,6 +43,10 @@ class Factory:
         return self.terms[code]
 
     def department(self, code: str, name: str | None = None) -> Department:
+        if code not in self.departments:
+            found = self.db.scalars(select(Department).where(Department.code == code))
+            if (dept := found.one_or_none()) is not None:
+                self.departments[code] = dept
         if code not in self.departments:
             dept = Department(code=code, name=name or f"{code} Department")
             self.db.add(dept)

@@ -303,3 +303,68 @@ def test_professor_reviews(api: TestClient, world: dict[str, int]) -> None:
 
     walsh = api.get(f"/api/professors/walsh-joel/reviews?term={FALL}").json()
     assert ids(walsh) == [world["walsh"]] and walsh["total"] == 1
+
+
+def test_course_list(api: TestClient, world: dict[str, int]) -> None:
+    courses = api.get("/api/courses").json()
+    assert [c["key"] for c in courses] == [
+        "AMST-329",
+        "BLST-329",
+        "COMP-131",
+        "PHYS-100",
+        "PHYS-206",
+    ]
+    assert courses[-1] == {
+        "key": "PHYS-206",
+        "dept": "PHYS",
+        "number": "206",
+        "title": "Modern Physics",
+        "former_numbers": ["266"],  # "PHYS 266" can find it
+    }
+    assert courses[2]["former_numbers"] == []
+
+
+def test_professor_list(api: TestClient, world: dict[str, int]) -> None:
+    professors = api.get("/api/professors").json()
+    assert [(p["key"], p["departments"]) for p in professors] == [
+        ("lee-ann", ["COMP"]),  # taught only a lab
+        ("park-jun", ["PHYS"]),
+        ("smith-kim", ["AMST", "BLST"]),
+        ("walsh-joel", ["COMP"]),
+        ("zhang-mei", ["COMP"]),
+    ]
+    assert professors[0]["display_name"] == "Ann Lee"
+
+
+@pytest.mark.parametrize("path", ["/api/departments", "/api/courses", "/api/professors"])
+def test_lists_are_not_sent_again_when_unchanged(
+    api: TestClient, db: Session, world: dict[str, int], path: str
+) -> None:
+    first = api.get(path)
+    etag = first.headers["etag"]
+    assert first.headers["cache-control"] == "no-cache"
+
+    again = api.get(path, headers={"If-None-Match": etag})
+    assert again.status_code == 304 and again.content == b""
+    assert again.headers["etag"] == etag
+    weak = api.get(path, headers={"If-None-Match": f"W/{etag}"})
+    assert weak.status_code == 304
+
+    # An import changes the data, so the old ETag no longer matches.
+    f = Factory(db)
+    f.section(f.course("ZOOL-101"), FALL, "1999", "ZOOL 101 1", [f.professor("new-person")])
+    db.flush()
+    changed = api.get(path, headers={"If-None-Match": etag})
+    assert changed.status_code == 200 and changed.headers["etag"] != etag
+
+
+def test_large_responses_are_gzipped(api: TestClient, db: Session) -> None:
+    f = Factory(db)
+    for n in range(100, 140):
+        f.course(f"COMP-{n}", f"A long enough course title number {n}")
+    db.flush()
+    big = api.get("/api/courses", headers={"Accept-Encoding": "gzip"})
+    assert big.headers["content-encoding"] == "gzip"
+    assert len(big.json()) == 40  # the client decompresses it
+    small = api.get("/api/departments", headers={"Accept-Encoding": "gzip"})
+    assert "content-encoding" not in small.headers

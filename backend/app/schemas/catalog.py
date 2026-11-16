@@ -29,6 +29,24 @@ class DepartmentOut(BaseModel):
     professor_count: int  # professors who taught a section of one of its courses
 
 
+class CourseIndexItem(BaseModel):
+    """One course in the full list behind the type-to-match pickers (matched in the browser)."""
+
+    key: str
+    dept: str
+    number: str  # current number
+    title: str
+    former_numbers: list[str]  # other numbers it was listed under ("PHYS 266" finds PHYS-206)
+
+
+class ProfessorIndexItem(BaseModel):
+    """One professor in the full list behind the type-to-match pickers."""
+
+    key: str
+    display_name: str
+    departments: list[str]  # codes of the departments they taught in (labs included)
+
+
 class CourseListItem(BaseModel):
     key: str
     number: str

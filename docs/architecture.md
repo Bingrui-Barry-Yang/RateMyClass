@@ -41,6 +41,7 @@ backend/app/
 ├── db/base.py        Declarative Base with a constraint naming convention
 ├── db/session.py     Engine, SessionLocal, get_db dependency
 ├── api/router.py     Collects all route modules
+├── api/caching.py    ETag / 304 for responses that change only on import
 ├── api/routes/       HTTP layer: parse input, call a service, return a schema
 ├── services/         Business rules (validation, lockouts, anonymous review tokens…)
 │   ├── catalog.py    Lookups by natural key, department/course/professor pages
@@ -112,7 +113,9 @@ Paths use natural keys; an unknown key (also in a filter) is a 404 with a `detai
 
 | Endpoint | Returns |
 | --- | --- |
-| `GET /api/departments` | every department with its course and professor counts |
+| `GET /api/departments` | every department with its course and professor counts (ETag) |
+| `GET /api/courses` | every course: key, dept, number, title, former numbers (ETag) |
+| `GET /api/professors` | every professor: key, name, departments taught in (ETag) |
 | `GET /api/departments/{code}/courses` | its courses by number, with the latest term, review count and average |
 | `GET /api/departments/{code}/professors` | professors who taught one of its courses (labs included), by last name |
 | `GET /api/courses/{course_key}` | course fields, terms offered (from real sections, not `numbers`), professors with their terms, related and cross-listed courses, rating summary |
@@ -129,6 +132,12 @@ Paths use natural keys; an unknown key (also in a filter) is a 404 with a `detai
   who would take the course / the professor again, and how often each emphasis was chosen. With
   no reviews: count 0, the rest null (an existing course or professor is still 200).
 - **Paging:** `limit` 1-100 (default 20), `offset` from 0; the response has `total`.
+- **Type-to-match pickers match in the browser.** There is no server search: the frontend loads
+  the three full lists once (about 230 KB for courses, 43 KB gzipped) and filters them as the user
+  types (rules in plan Stage 3). The lists answer with an `ETag` and `Cache-Control: no-cache`:
+  the browser asks before each use and gets `304 Not Modified` with no body until an import
+  changes the data (`api/caching.py`).
+- **Compression:** `GZipMiddleware` gzips responses over 1 KB when the client accepts it.
 - **Planner links:** the course planner links only to the course page and the professor page
   (`/courses/{course_key}`, `/professors/{professor_key}` in the frontend), built on these
   endpoints.

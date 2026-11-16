@@ -38,6 +38,40 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/courses': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Courses */
+    get: operations['list_courses']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/professors': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Professors */
+    get: operations['list_professors']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
   '/api/departments/{code}/courses': {
     parameters: {
       query?: never
@@ -182,6 +216,22 @@ export interface components {
       /** Cross Listed */
       cross_listed: components['schemas']['CrossListedCourse'][]
       summary: components['schemas']['RatingSummary']
+    }
+    /**
+     * CourseIndexItem
+     * @description One course in the full list behind the type-to-match pickers (matched in the browser).
+     */
+    CourseIndexItem: {
+      /** Key */
+      key: string
+      /** Dept */
+      dept: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Former Numbers */
+      former_numbers: string[]
     }
     /** CourseListItem */
     CourseListItem: {
@@ -337,6 +387,18 @@ export interface components {
       /** Courses */
       courses: components['schemas']['ProfessorCourse'][]
       summary: components['schemas']['RatingSummary']
+    }
+    /**
+     * ProfessorIndexItem
+     * @description One professor in the full list behind the type-to-match pickers.
+     */
+    ProfessorIndexItem: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+      /** Departments */
+      departments: string[]
     }
     /** ProfessorListItem */
     ProfessorListItem: {
@@ -520,6 +582,60 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['DepartmentOut'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_courses: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CourseIndexItem'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_professors: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessorIndexItem'][]
         }
       }
       /** @description Not found */
