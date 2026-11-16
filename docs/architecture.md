@@ -44,7 +44,8 @@ backend/app/
 ├── api/routes/       HTTP layer: parse input, call a service, return a schema
 ├── services/         Business rules (validation, lockouts, anonymous review tokens…)
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
-│   └── catalog.py    departments, terms, courses, sections, professors, section_professors
+│   ├── catalog.py    departments, terms, courses, sections, professors, section_professors
+│   └── review.py     reviews, review_targets (anonymous: no user or email columns)
 └── schemas/          Pydantic request/response models
     └── catalog_export.py  Public catalog format (docs/catalog-export.md), with services/catalog_export.py
 ```
@@ -75,6 +76,24 @@ Filled by the scraper's import step; the API only reads them.
 The tables mirror the source: an import deletes sections the site no longer lists (cancelled
 classes), and courses, professors and departments left without sections. A section that changes
 (time, professors, course) keeps its row and id. Terms are never deleted.
+
+### Review tables
+
+| Table | Notes |
+| --- | --- |
+| `reviews` | scores 1-10 (`overall`, `difficulty`, `workload`), `take_course_again`, `take_prof_again`, `emphasis` (subset of exam / participation / paper / presentation / project), `comment` (up to 5000 characters), `created_on` / `updated_on` as dates only. No user or email column |
+| `review_targets` | the (section, professor) pairs a review is about: one review can cover a lecture and a lab taught by the same professor. `review_token` is unique |
+
+Anonymity: `review_token` = HMAC(REVIEW_SECRET, account, section, professor), computed by the
+server when a review is written. It stops one account from reviewing the same pair twice and
+lets the author find the review to edit it, but cannot be turned back into the account; the
+secret lives only in the server environment. Dates are kept to the day so they cannot be matched
+with login times.
+
+Deletes: a review target goes with its section (a cancelled class had no students), and a review
+with its last target. A professor who has reviews cannot be deleted (`RESTRICT`), so an import
+that would remove one fails and a person decides; account tables come with login (Stage 4) and
+lockouts with review submission (Stage 5).
 
 ## Scraper
 

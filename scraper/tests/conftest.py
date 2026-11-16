@@ -14,15 +14,33 @@ def fixture_html(name: str) -> str:
 
 @pytest.fixture
 def db() -> Iterator[Session]:
-    """A session on empty catalog tables. Everything, the emptying included, is rolled back at
-    the end, so the local database keeps its data."""
+    """A session on empty catalog and review tables. Everything, the emptying included, is
+    rolled back at the end, so the local database keeps its data."""
     from app.db.session import engine
-    from app.models import Course, Department, Professor, Section, SectionProfessor, Term
+    from app.models import (
+        Course,
+        Department,
+        Professor,
+        Review,
+        ReviewTarget,
+        Section,
+        SectionProfessor,
+        Term,
+    )
 
     with engine.connect() as connection:
         transaction = connection.begin()
         session = Session(bind=connection, join_transaction_mode="create_savepoint")
-        for model in (SectionProfessor, Section, Course, Professor, Term, Department):
+        for model in (
+            ReviewTarget,
+            Review,
+            SectionProfessor,
+            Section,
+            Course,
+            Professor,
+            Term,
+            Department,
+        ):
             session.execute(delete(model))
         try:
             yield session
