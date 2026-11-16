@@ -817,6 +817,7 @@ class Normalizer:
             "units": r["units"],
             "meetings": r["meetings"],
             "core": r["core"],
+            "seats_max": r.get("seats", {}).get("max"),
             "professor_keys": list(dict.fromkeys(self._professor_key(n) for n in row.names())),
             "cross_list_group": group,
         }

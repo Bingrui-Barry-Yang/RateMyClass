@@ -30,6 +30,7 @@ class Term:
         meetings: list[tuple[str, str]] = MWF,
         description: str | None = None,
         restrictions: tuple[str, ...] = (),
+        seats_max: int | None = None,
     ) -> "Term":
         m = CODE_RE.match(code)
         assert m
@@ -47,7 +48,7 @@ class Term:
                 "instructors": [{"full": f, "short": s} for f, s in profs],
                 "meetings": [{"time": t, "days": d} for t, d in meetings],
                 "core": [],
-                "seats": {},
+                "seats": {} if seats_max is None else {"max": seats_max, "enrolled": 0},
                 "detail_crn": crn if description else None,
                 "detail_shared": False,
             }

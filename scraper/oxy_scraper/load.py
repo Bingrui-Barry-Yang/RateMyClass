@@ -56,6 +56,7 @@ SECTION_COLUMNS = (
     "units",
     "meetings",
     "core",
+    "seats_max",
     "cross_list_group",
 )
 SECTION_FIELDS = ("course_key", *SECTION_COLUMNS, "parent_crn", "professor_keys")

@@ -132,6 +132,17 @@ def test_new_time_updates_the_section_and_its_cross_listing(db: Session) -> None
     assert section(db, "202602", "BLST 329 1").cross_list_group is None
 
 
+def test_new_seat_count_updates_the_section(db: Session) -> None:
+    load_catalog(db, catalog())
+    term = spring()
+    term.sections[0]["seats"] = {"max": 35, "enrolled": 34}
+    diff = load_catalog(db, run(term, fall()))
+
+    assert diff.tables["sections"].changed[("202602", "10")] == {"seats_max": (None, 35)}
+    assert section(db, "202602", "COMP 131 1").seats_max == 35
+    assert diff_catalog(db, run(term, fall())).empty
+
+
 def test_untitled_topic_with_a_new_professor_moves_to_another_course(db: Session) -> None:
     load_catalog(db, catalog())
     before = section(db, "202602", "BIO 103 1")
