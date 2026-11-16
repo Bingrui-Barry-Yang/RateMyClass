@@ -11,4 +11,5 @@ STAGING_DIR = RAW_DIR / ".staging"  # `update` downloads here, swapped into raw/
 PARSED_DIR = DATA_DIR / "parsed"  # step 2: one JSON per term, rows as listed
 NORMALIZED_DIR = DATA_DIR / "normalized"  # step 3: courses/sections/professors to import
 REPORTS_DIR = DATA_DIR / "reports"  # QA reports for manual review
+EXPORT_DIR = DATA_DIR / "export"  # public catalog files (docs/catalog-export.md)
 OVERRIDES_DIR = REPO_ROOT / "scraper" / "overrides"  # committed, hand-maintained CSVs

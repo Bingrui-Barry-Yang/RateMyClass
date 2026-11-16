@@ -119,6 +119,8 @@ class Section(Base):
     title: Mapped[str] = mapped_column(String(300))  # as listed that term
     units: Mapped[int | None] = mapped_column(Integer)
     meetings: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list)
+    # Max seats ("Max" column of the list) as of the latest download; enrollment is not kept.
+    seats_max: Mapped[int | None] = mapped_column(Integer)
     core: Mapped[list[dict[str, str]]] = mapped_column(JSONB, default=list)
     # Same id for the copies of one class listed under several departments.
     cross_list_group: Mapped[str | None] = mapped_column(String(100), index=True)

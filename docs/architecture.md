@@ -46,6 +46,7 @@ backend/app/
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
 │   └── catalog.py    departments, terms, courses, sections, professors, section_professors
 └── schemas/          Pydantic request/response models
+    └── catalog_export.py  Public catalog format (docs/catalog-export.md), with services/catalog_export.py
 ```
 
 Rules of thumb:
@@ -67,7 +68,7 @@ Filled by the scraper's import step; the API only reads them.
 | `departments` | `code` | `COMP` / Computer Science |
 | `terms` | `code` | `202602`; `year` and `season` (fall/spring/summer) |
 | `courses` | `key` | `COMP-131`, or one topic of a topics course (`COMP-395-deep-learning`); latest description plus `description_history`; `related` links courses kept apart but connected (`formerly` / `now` / `see_also`) |
-| `sections` | `(term_id, crn)` | one listed row: `kind` lecture/lab, dash labs point at their lecture (`parent_section_id`), `cross_list_group` links copies listed under several departments |
+| `sections` | `(term_id, crn)` | one listed row: `kind` lecture/lab, `seats_max` (max seats as of the latest download), dash labs point at their lecture (`parent_section_id`), `cross_list_group` links copies listed under several departments |
 | `professors` | `key` | `camarillo-abad-hector-miguel` |
 | `section_professors` | `(section_id, professor_id)` | co-teachers in listed order (`position`) |
 
@@ -86,6 +87,7 @@ scraper/oxy_scraper/
 ├── parsed.py      Step 2: data/raw -> data/parsed/<term>.json (offline)
 ├── normalize.py   Step 3: data/parsed + overrides -> data/normalized/*.json + data/reports/*.csv
 ├── load.py        Step 4: data/normalized -> Postgres catalog tables (diff + apply, one transaction)
+├── export.py      Database -> data/export/*.json, the public catalog format (docs/catalog-export.md)
 ├── parse.py       HTML -> rows and details (pure functions, tested against saved fixtures)
 ├── titles.py      "Main: Subtitle" splitting, slugs, abbreviation-insensitive title comparison
 ├── names.py       Professor names and keys ("camarillo-abad-hector-miguel")
@@ -184,6 +186,14 @@ importing into an empty database. It refuses to delete more than 20% of a term's
 twice changes nothing. The whole load is one transaction. Scraper tests that touch the database (and the backend
 `db` fixture) empty the catalog tables inside a rolled-back transaction, so a local database
 keeps its imported data; CI gives the `scraper` job its own Postgres.
+
+After a successful import, `make import` runs `export`: it writes the public catalog files to
+`data/export/` (`catalog-index.json`, one `catalog-<term>.json` per term with courses and
+professors embedded, `courses.json`, `professors.json`), each written to a temporary file and
+renamed. The models and queries are in the backend (`app/schemas/catalog_export.py`,
+`app/services/catalog_export.py`) so the read-only `/api/v1` can return the same data. The format
+is documented for other projects in `docs/catalog-export.md`; adding fields is fine, anything else
+needs a new `schema_version`.
 
 ## Frontend
 

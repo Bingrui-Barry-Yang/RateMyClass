@@ -39,6 +39,15 @@ def test_special_topics_split_by_subtitle_and_merge_across_spellings() -> None:
     assert {r[2] for r in topic_rows} == {"topics title"}
 
 
+def test_sections_keep_the_max_seats() -> None:
+    term = Term("202602").add("1", "COMP 131 1", "Fundamentals", seats_max=35)
+    term.add("2", "COMP 131 1-1", "Fundamentals Laboratory")  # no seat counts
+    s = sections(run(term))
+
+    assert s[("202602", "COMP 131 1")]["seats_max"] == 35
+    assert s[("202602", "COMP 131 1-1")]["seats_max"] is None
+
+
 def test_plain_topics_title_without_subtitles_is_a_normal_course() -> None:
     t = Term("202601").add("1", "BLST 105 0", "Topics in American Music")
     t2 = Term("202701").add("2", "BLST 105 0", "Topics in American Music")

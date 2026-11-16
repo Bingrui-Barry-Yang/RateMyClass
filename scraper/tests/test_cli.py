@@ -33,3 +33,9 @@ def test_update_options_parse() -> None:
 
     args = build_parser().parse_args(["update", "--terms", "202702", "--all"])
     assert (args.terms, args.all, args.delay) == ("202702", True, 1.0)
+
+
+def test_export_is_a_command() -> None:
+    from oxy_scraper.cli import build_parser
+
+    assert build_parser().parse_args(["export"]).command == "export"
