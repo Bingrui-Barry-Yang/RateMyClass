@@ -1,13 +1,19 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from app.api.router import api_router
 from app.core.config import get_settings
+from app.services.errors import NotFoundError
 
 
 def _operation_id(route: APIRoute) -> str:
     # Clean operation ids ("health" instead of "health_api_health_get") for the generated client.
     return route.name
+
+
+def _not_found(_: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"detail": str(exc)})
 
 
 def create_app() -> FastAPI:
@@ -21,6 +27,7 @@ def create_app() -> FastAPI:
         generate_unique_id_function=_operation_id,
     )
     app.include_router(api_router, prefix=settings.api_prefix)
+    app.add_exception_handler(NotFoundError, _not_found)
     return app
 
 

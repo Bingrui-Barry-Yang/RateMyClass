@@ -43,11 +43,17 @@ backend/app/
 ├── api/router.py     Collects all route modules
 ├── api/routes/       HTTP layer: parse input, call a service, return a schema
 ├── services/         Business rules (validation, lockouts, anonymous review tokens…)
+│   ├── catalog.py    Lookups by natural key, department/course/professor pages
+│   ├── reviews.py    Review filters (cross-list aware), summaries, review counts
+│   ├── errors.py     NotFoundError, turned into a 404 by main.py
+│   └── catalog_export.py  Queries for the public catalog format
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
 │   ├── catalog.py    departments, terms, courses, sections, professors, section_professors
 │   └── review.py     reviews, review_targets (anonymous: no user or email columns)
 └── schemas/          Pydantic request/response models
-    └── catalog_export.py  Public catalog format (docs/catalog-export.md), with services/catalog_export.py
+    ├── catalog.py    Departments, courses, professors for the site's pages
+    ├── reviews.py    Reviews, rating summaries, review pages
+    └── catalog_export.py  Public catalog format (docs/catalog-export.md)
 ```
 
 Rules of thumb:
@@ -90,10 +96,42 @@ lets the author find the review to edit it, but cannot be turned back into the a
 secret lives only in the server environment. Dates are kept to the day so they cannot be matched
 with login times.
 
-Deletes: a review target goes with its section (a cancelled class had no students), and a review
-with its last target. A professor who has reviews cannot be deleted (`RESTRICT`), so an import
-that would remove one fails and a person decides; account tables come with login (Stage 4) and
-lockouts with review submission (Stage 5).
+Deletes: when an import deletes a section, the review targets pointing at that section are
+deleted with it; reviews of the same course and professor on other sections are not touched.
+Only sections cancelled before the term starts should be deleted, and those have no reviews yet
+(reviews open when the term starts). The review row itself is not deleted with its targets, so
+the import will refuse to delete a section that has reviews and report it for a person to check
+(Stage 5). A professor who has reviews cannot be deleted (`RESTRICT`), so an import that would
+remove one fails and a person decides; account tables come with login (Stage 4) and lockouts
+with review submission (Stage 5).
+
+### Read-only API
+
+Routes in `api/routes/catalog.py`, rules in `services/catalog.py` and `services/reviews.py`.
+Paths use natural keys; an unknown key (also in a filter) is a 404 with a `detail` message.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/departments` | every department with its course and professor counts |
+| `GET /api/departments/{code}/courses` | its courses by number, with the latest term, review count and average |
+| `GET /api/departments/{code}/professors` | professors who taught one of its courses (labs included), by last name |
+| `GET /api/courses/{course_key}` | course fields, terms offered (from real sections, not `numbers`), professors with their terms, related and cross-listed courses, rating summary |
+| `GET /api/courses/{course_key}/reviews?professor=&term=&limit=&offset=` | reviews, newest first |
+| `GET /api/professors/{professor_key}` | departments, courses with terms, rating summary |
+| `GET /api/professors/{professor_key}/reviews?course=&term=&limit=&offset=` | reviews, newest first |
+
+- **Cross-lists share reviews:** a course's reviews include those on sections with the same
+  `cross_list_group`, so AMST 329 and BLST 329 show the same reviews and summary.
+- **Filters apply to one target:** `?professor=` keeps reviews with a target on the course taught
+  by that professor. The page's `summary` follows the filters and covers every page.
+- **A lecture + lab review counts once** in counts and averages.
+- **Rating summary:** count, average overall / difficulty / workload (one decimal), percentage
+  who would take the course / the professor again, and how often each emphasis was chosen. With
+  no reviews: count 0, the rest null (an existing course or professor is still 200).
+- **Paging:** `limit` 1-100 (default 20), `offset` from 0; the response has `total`.
+- **Planner links:** the course planner links only to the course page and the professor page
+  (`/courses/{course_key}`, `/professors/{professor_key}` in the frontend), built on these
+  endpoints.
 
 ## Scraper
 

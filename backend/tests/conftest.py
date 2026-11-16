@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
-from app.db.session import engine
+from app.db.session import engine, get_db
 from app.main import create_app
 from app.models import (
     Course,
@@ -41,3 +41,12 @@ def db() -> Iterator[Session]:
         finally:
             session.close()
             transaction.rollback()
+
+
+@pytest.fixture
+def api(db: Session) -> Iterator[TestClient]:
+    """A client whose requests read and write through the rolled-back `db` session."""
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    with TestClient(app) as c:
+        yield c
