@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from oxy_scraper import paths
 from oxy_scraper.client import CountsClient
 from oxy_scraper.exclusions import load_exclusions
+from oxy_scraper.export import export_catalog
 from oxy_scraper.fetch import AbortRun, Fetcher
 from oxy_scraper.load import (
     CatalogDiff,
@@ -86,6 +87,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="refuse to delete more than this share of a term's sections (default 0.2)",
     )
     load.add_argument("--force", action="store_true", help="import even past --max-removed")
+    commands.add_parser(
+        "export",
+        help="write the public catalog files (docs/catalog-export.md) from the database to "
+        "data/export/",
+    )
     return parser
 
 
@@ -122,6 +128,15 @@ def run_load(*, dry_run: bool = False, max_removed: float = 0.2, force: bool = F
             return 0
         session.commit()
     log.info("database updated")
+    return 0
+
+
+def run_export() -> int:
+    from app.db.session import SessionLocal  # connects to DATABASE_URL; only needed here
+
+    with SessionLocal() as session:
+        files = export_catalog(session, paths.EXPORT_DIR)
+    log.info("exported %d files -> %s", len(files), paths.EXPORT_DIR)
     return 0
 
 
@@ -238,5 +253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_normalize()
     if args.command == "load":
         return run_load(dry_run=args.dry_run, max_removed=args.max_removed, force=args.force)
+    if args.command == "export":
+        return run_export()
     parser.print_help()
     return 0

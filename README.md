@@ -42,6 +42,9 @@ make scrape    # first run downloads all terms (~1 request/s, a few hours); safe
 make import    # groups the data into courses and loads it into the database; safe to rerun
 ```
 
+`make import` also writes the public catalog files to `data/export/` (format: [docs/catalog-export.md](docs/catalog-export.md)),
+which other projects such as the course planner use instead of scraping the site themselves.
+
 ### Updating course data
 
 When counts.oxy.edu changes (classes cancelled, moved or reassigned, descriptions edited, a new term
@@ -50,7 +53,7 @@ published):
 ```bash
 make migrate   # after pulling new code: apply any new database migrations first
 make update    # re-downloads new and changed terms, then reports what the import would change
-make import    # applies it; check data/reports/update/<time>/summary.txt first
+make import    # applies it (and re-exports); check data/reports/update/<time>/summary.txt first
 ```
 
 `make update` checks the current academic year and later plus any term new on the site, and
@@ -69,6 +72,7 @@ in place. It stops if a term would lose more than 20% of its sections (usually a
 | `data/raw` | Downloaded pages (gzip HTML), so parsing can be redone without the network |
 | `data/parsed` | One JSON file per term: every listed section as shown, plus course details |
 | `data/normalized` | Terms, departments, courses, sections and professors, the input of `make import` |
+| `data/export` | Public catalog JSON for other projects ([docs/catalog-export.md](docs/catalog-export.md)), written by `make import` / `make export` |
 | `data/reports` | CSV reports for review (topic splits, title changes, renumbered courses, possible duplicate professors, unmatched labs, overrides that no longer match anything, and full tables of all sections and courses); `data/reports/update/<time>/` holds what each import changed |
 
 Corrections are made by hand in the committed CSV files in `scraper/overrides/`, never in the database:
@@ -97,7 +101,8 @@ Run `make help` for the full list.
 | `make scrape` | First download of course data from counts.oxy.edu into `data/raw` (cached, resumable) and parse it into `data/parsed` (`terms=202602,202603`) |
 | `make update` | Re-download new and changed terms, normalize, and report what `make import` would change (`terms=…`, `all=1`) |
 | `make normalize` | Group parsed data into courses, sections and professors (`data/normalized`) and write review reports (`data/reports`) |
-| `make import` | Normalize, then make the database match it and write a change report to `data/reports/update` (`force=1`). Needs `make db-up migrate` and `make scrape` first |
+| `make import` | Normalize, then make the database match it and write a change report to `data/reports/update` (`force=1`), then export. Needs `make db-up migrate` and `make scrape` first |
+| `make export` | Write the public catalog JSON from the database to `data/export` ([docs/catalog-export.md](docs/catalog-export.md)) |
 
 ## Dependencies
 

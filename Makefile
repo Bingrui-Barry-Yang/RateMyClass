@@ -12,7 +12,7 @@ SCRAPER  := cd scraper &&
 
 .PHONY: help setup env db-up db-down db-reset dev dev-backend dev-frontend migrate migration \
         gen-api test test-backend test-scraper test-frontend lint lint-backend lint-scraper \
-        lint-frontend format build scrape update normalize import
+        lint-frontend format build scrape update normalize import export
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -91,9 +91,13 @@ update: ## Sync data/raw with the site (changed/new terms), normalize, report DB
 normalize: ## Group data/parsed into data/normalized and write review reports to data/reports
 	$(SCRAPER) uv run python -m oxy_scraper normalize
 
-import: ## Normalize and make the database match it (reports in data/reports/update): make import [force=1]
+import: ## Normalize, make the database match it (reports in data/reports/update), then export: make import [force=1]
 	$(SCRAPER) uv run python -m oxy_scraper normalize
 	$(SCRAPER) uv run python -m oxy_scraper load $(if $(force),--force)
+	$(SCRAPER) uv run python -m oxy_scraper export
+
+export: ## Write the public catalog JSON (docs/catalog-export.md) from the database to data/export
+	$(SCRAPER) uv run python -m oxy_scraper export
 
 build: ## Production build of the frontend
 	$(FRONTEND) npm run build
