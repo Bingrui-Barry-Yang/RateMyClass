@@ -11,6 +11,8 @@ from typing import Any
 from fastapi import Request, Response
 from fastapi.encoders import jsonable_encoder
 
+# Public data for other sites (/api/v1): shared caches may reuse it for five minutes without asking.
+PUBLIC_5_MIN = "public, max-age=300"
 # The browser may keep the response but must ask (with the ETag) before every use, so new data
 # shows up right after an import while unchanged data costs only a 304.
 REVALIDATE = "no-cache"

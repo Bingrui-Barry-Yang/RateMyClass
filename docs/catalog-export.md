@@ -5,7 +5,7 @@ other projects (for example a course planner) so they do not have to scrape it t
 
 - **Files:** `make export` writes them from the database to `data/export/`. `make import` runs it
   after every successful import.
-- **API:** the read-only `/api/v1` will return the same models.
+- **API:** the read-only `/api/v1` returns the same models (see [API](#api)).
 - **Code:** the models are in `backend/app/schemas/catalog_export.py` and the queries in
   `backend/app/services/catalog_export.py`.
 
@@ -211,8 +211,37 @@ Labs come in two forms:
   change report and imports it (`make import`). The export follows each import, and
   `generated_at` shows when it was made.
 
+## API
+
+The same data, read live from RateMyClassOxy's database. No login. Paths are under the site's
+`/api` prefix (locally `http://localhost:8010/api/v1/...`; the public address comes with launch).
+
+| Endpoint | Returns | Same as |
+| --- | --- | --- |
+| `GET /api/v1/terms` | list of terms | `terms` of `catalog-index.json` |
+| `GET /api/v1/departments` | list of departments | `departments` of `catalog-index.json` |
+| `GET /api/v1/core-areas` | list of Core areas | `core_areas` of `catalog-index.json` |
+| `GET /api/v1/catalog?term=202702` | every section of one term | `catalog-202702.json` |
+| `GET /api/v1/courses/{course_key}` | one course | an entry of `courses.json` |
+| `GET /api/v1/professors/{professor_key}` | one professor | an entry of `professors.json` |
+
+- **Unknown term or key:** `404` with `{"detail": "..."}`. A missing `term` is `422`.
+- **`generated_at`** (in `/catalog`) is the same as in the files: when RateMyClassOxy last
+  published the data (the export that follows each import). Show it as "data updated on …".
+- **Caching:** every response has an `ETag` and `Cache-Control: public, max-age=300`. Send the
+  ETag back in `If-None-Match` to get `304 Not Modified` (no body) while the data is unchanged.
+  The data changes only when RateMyClassOxy imports a new download.
+- **Compression:** responses are gzipped when the request accepts it (a term's catalog is about
+  1.1 MB, about 170 KB gzipped).
+- **Browser calls (CORS):** only sites RateMyClassOxy lists may call it from a browser; only `GET`.
+  Server-side calls are not limited by this.
+- **Types:** the OpenAPI schema is at `/api/openapi.json` (endpoints tagged `public v1`), e.g. for
+  `openapi-typescript`.
+- **Redirects** from changed course or professor keys to new ones are not there yet: an old key
+  is a `404` for now.
+
 ## Versioning
 
 - Adding a field is not a breaking change: ignore fields you do not know.
-- Renaming or removing a field, or changing what it means, increases `schema_version`. The
-  previous version is kept available for a while.
+- Renaming or removing a field, or changing what it means, increases `schema_version` (and the
+  API moves to `/api/v2`). The previous version is kept available for a while.

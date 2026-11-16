@@ -44,6 +44,9 @@ make import    # groups the data into courses and loads it into the database; sa
 
 `make import` also writes the public catalog files to `data/export/` (format: [docs/catalog-export.md](docs/catalog-export.md)),
 which other projects such as the course planner use instead of scraping the site themselves.
+The same data is served by the public read-only API under `/api/v1` (listed in the format doc).
+To let another site call it from a browser, list that site in `CORS_ORIGINS` in `.env`
+(comma-separated, e.g. `CORS_ORIGINS=http://localhost:5280`).
 
 ### Updating course data
 

@@ -138,6 +138,16 @@ Paths use natural keys; an unknown key (also in a filter) is a 404 with a `detai
   the browser asks before each use and gets `304 Not Modified` with no body until an import
   changes the data (`api/caching.py`).
 - **Compression:** `GZipMiddleware` gzips responses over 1 KB when the client accepts it.
+- **Public API `/api/v1`** (`api/routes/public_v1.py`): terms, departments, Core areas,
+  `catalog?term=`, one course, one professor, built by `services/catalog_export.py` so it always
+  equals the `make export` files (format in `docs/catalog-export.md`). `generated_at` is read
+  from `data/export/catalog-index.json` (`Settings.export_dir`: `$OXY_DATA_DIR/export` when that
+  environment variable is set, as for the scraper; it must be an environment variable, not a
+  `.env` line, because the scraper does not read `.env`). Without a readable file it falls back to
+  the current time and the app logs a warning at startup; in production the backend needs the
+  export folder mounted read-only. Responses use `cached_json` (`Cache-Control: public,
+  max-age=300`, ETag of the body, which is identical while the data is unchanged). CORS (`PublicCors` in `main.py`) applies only under
+  `/api/v1`: origins from `CORS_ORIGINS`, `GET` only, none by default.
 - **Planner links:** the course planner links only to the course page and the professor page
   (`/courses/{course_key}`, `/professors/{professor_key}` in the frontend), built on these
   endpoints.
