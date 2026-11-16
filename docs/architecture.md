@@ -41,12 +41,22 @@ backend/app/
 ├── db/base.py        Declarative Base with a constraint naming convention
 ├── db/session.py     Engine, SessionLocal, get_db dependency
 ├── api/router.py     Collects all route modules
+├── api/caching.py    ETag / 304 for responses that change only on import
 ├── api/routes/       HTTP layer: parse input, call a service, return a schema
 ├── services/         Business rules (validation, lockouts, anonymous review tokens…)
+│   ├── catalog.py    Lookups by natural key, department/course/professor pages
+│   ├── reviews.py    Review filters (cross-list aware), summaries, review counts
+│   ├── errors.py     NotFoundError, turned into a 404 by main.py
+│   ├── terms.py      Term seasons, current term, has_started (also used by the scraper)
+│   └── catalog_export.py  Queries for the public catalog format
+├── dev/seed_reviews.py  Fake reviews for local development (make seed-reviews / clear-reviews)
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
-│   └── catalog.py    departments, terms, courses, sections, professors, section_professors
+│   ├── catalog.py    departments, terms, courses, sections, professors, section_professors
+│   └── review.py     reviews, review_targets (anonymous: no user or email columns)
 └── schemas/          Pydantic request/response models
-    └── catalog_export.py  Public catalog format (docs/catalog-export.md), with services/catalog_export.py
+    ├── catalog.py    Departments, courses, professors for the site's pages
+    ├── reviews.py    Reviews, rating summaries, review pages
+    └── catalog_export.py  Public catalog format (docs/catalog-export.md)
 ```
 
 Rules of thumb:
@@ -75,6 +85,87 @@ Filled by the scraper's import step; the API only reads them.
 The tables mirror the source: an import deletes sections the site no longer lists (cancelled
 classes), and courses, professors and departments left without sections. A section that changes
 (time, professors, course) keeps its row and id. Terms are never deleted.
+
+### Review tables
+
+| Table | Notes |
+| --- | --- |
+| `reviews` | scores 1-10 (`overall`, `difficulty`, `workload`), `take_course_again`, `take_prof_again`, `emphasis` (subset of exam / participation / paper / presentation / project), `comment` (up to 5000 characters), `created_on` / `updated_on` as dates only. No user or email column |
+| `review_targets` | the (section, professor) pairs a review is about: one review can cover a lecture and a lab taught by the same professor. `review_token` is unique |
+
+Anonymity: `review_token` = HMAC(REVIEW_SECRET, account, section, professor), computed by the
+server when a review is written. It stops one account from reviewing the same pair twice and
+lets the author find the review to edit it, but cannot be turned back into the account; the
+secret lives only in the server environment. Dates are kept to the day so they cannot be matched
+with login times.
+
+Deletes: when an import deletes a section, the review targets pointing at that section are
+deleted with it; reviews of the same course and professor on other sections are not touched.
+Only sections cancelled before the term starts should be deleted, and those have no reviews yet
+(reviews open when the term starts). The review row itself is not deleted with its targets, so
+the import will refuse to delete a section that has reviews and report it for a person to check
+(Stage 5). A professor who has reviews cannot be deleted (`RESTRICT`), so an import that would
+remove one fails and a person decides; account tables come with login (Stage 4) and lockouts
+with review submission (Stage 5).
+
+Terms that have started (`services/terms.py` `has_started`: the current term, by the date, and
+earlier ones) are the only ones reviews may be about. The scraper uses the same module for its
+current term.
+
+Fake reviews for development (`app/dev/seed_reviews.py`): `make seed-reviews [count=400]` writes
+reviews on real sections and professors of started terms (lecture alone, lecture + lab, lab
+alone, each professor of a co-taught section, cross-listed sections; a few featured courses get
+many). A fixed random seed gives the same reviews every time. It refuses if reviews exist;
+`make clear-reviews` deletes all of them. Fake reviews can never pass for real ones: every comment
+starts with `[Fake review for development]`, and both commands refuse unless the database is on
+this machine (`localhost`) and `APP_ENV` is not `production`, so they can neither add fake
+reviews to nor delete real ones from a server database.
+
+### Read-only API
+
+Routes in `api/routes/catalog.py`, rules in `services/catalog.py` and `services/reviews.py`.
+Paths use natural keys; an unknown key (also in a filter) is a 404 with a `detail` message.
+
+| Endpoint | Returns |
+| --- | --- |
+| `GET /api/departments` | every department with its course and professor counts (ETag) |
+| `GET /api/courses` | every course: key, dept, number, title, former numbers (ETag) |
+| `GET /api/professors` | every professor: key, name, departments taught in (ETag) |
+| `GET /api/departments/{code}/courses` | its courses by number, with the latest term, review count and average |
+| `GET /api/departments/{code}/professors` | professors who taught one of its courses (labs included), by last name |
+| `GET /api/courses/{course_key}` | course fields, terms offered (from real sections, not `numbers`), professors with their terms, related and cross-listed courses, rating summary |
+| `GET /api/courses/{course_key}/reviews?professor=&term=&limit=&offset=` | reviews, newest first |
+| `GET /api/professors/{professor_key}` | departments, courses with terms, rating summary |
+| `GET /api/professors/{professor_key}/reviews?course=&term=&limit=&offset=` | reviews, newest first |
+
+- **Cross-lists share reviews:** a course's reviews include those on sections with the same
+  `cross_list_group`, so AMST 329 and BLST 329 show the same reviews and summary.
+- **Filters apply to one target:** `?professor=` keeps reviews with a target on the course taught
+  by that professor. The page's `summary` follows the filters and covers every page.
+- **A lecture + lab review counts once** in counts and averages.
+- **Rating summary:** count, average overall / difficulty / workload (one decimal), percentage
+  who would take the course / the professor again, and how often each emphasis was chosen. With
+  no reviews: count 0, the rest null (an existing course or professor is still 200).
+- **Paging:** `limit` 1-100 (default 20), `offset` from 0; the response has `total`.
+- **Type-to-match pickers match in the browser.** There is no server search: the frontend loads
+  the three full lists once (about 230 KB for courses, 43 KB gzipped) and filters them as the user
+  types (rules in plan Stage 3). The lists answer with an `ETag` and `Cache-Control: no-cache`:
+  the browser asks before each use and gets `304 Not Modified` with no body until an import
+  changes the data (`api/caching.py`).
+- **Compression:** `GZipMiddleware` gzips responses over 1 KB when the client accepts it.
+- **Public API `/api/v1`** (`api/routes/public_v1.py`): terms, departments, Core areas,
+  `catalog?term=`, one course, one professor, built by `services/catalog_export.py` so it always
+  equals the `make export` files (format in `docs/catalog-export.md`). `generated_at` is read
+  from `data/export/catalog-index.json` (`Settings.export_dir`: `$OXY_DATA_DIR/export` when that
+  environment variable is set, as for the scraper; it must be an environment variable, not a
+  `.env` line, because the scraper does not read `.env`). Without a readable file it falls back to
+  the current time and the app logs a warning at startup; in production the backend needs the
+  export folder mounted read-only. Responses use `cached_json` (`Cache-Control: public,
+  max-age=300`, ETag of the body, which is identical while the data is unchanged). CORS (`PublicCors` in `main.py`) applies only under
+  `/api/v1`: origins from `CORS_ORIGINS`, `GET` only, none by default.
+- **Planner links:** the course planner links only to the course page and the professor page
+  (`/courses/{course_key}`, `/professors/{professor_key}` in the frontend), built on these
+  endpoints.
 
 ## Scraper
 

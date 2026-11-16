@@ -12,7 +12,7 @@ SCRAPER  := cd scraper &&
 
 .PHONY: help setup env db-up db-down db-reset dev dev-backend dev-frontend migrate migration \
         gen-api test test-backend test-scraper test-frontend lint lint-backend lint-scraper \
-        lint-frontend format build scrape update normalize import export
+        lint-frontend format build scrape update normalize import export seed-reviews clear-reviews
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(firstword $(MAKEFILE_LIST)) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -98,6 +98,12 @@ import: ## Normalize, make the database match it (reports in data/reports/update
 
 export: ## Write the public catalog JSON (docs/catalog-export.md) from the database to data/export
 	$(SCRAPER) uv run python -m oxy_scraper export
+
+seed-reviews: ## Add fake reviews for local development (refused in production): make seed-reviews [count=400]
+	$(BACKEND) uv run python -m app.dev.seed_reviews seed $(if $(count),--count $(count))
+
+clear-reviews: ## Delete every review (refused in production)
+	$(BACKEND) uv run python -m app.dev.seed_reviews clear
 
 build: ## Production build of the frontend
 	$(FRONTEND) npm run build

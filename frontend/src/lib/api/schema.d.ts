@@ -21,10 +21,535 @@ export interface paths {
     patch?: never
     trace?: never
   }
+  '/api/departments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Departments */
+    get: operations['list_departments']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/courses': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Courses */
+    get: operations['list_courses']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/professors': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Professors */
+    get: operations['list_professors']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/departments/{code}/courses': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Department Courses */
+    get: operations['list_department_courses']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/departments/{code}/professors': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Department Professors */
+    get: operations['list_department_professors']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/courses/{course_key}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Course */
+    get: operations['get_course']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/courses/{course_key}/reviews': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Course Reviews */
+    get: operations['list_course_reviews']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/professors/{professor_key}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** Get Professor */
+    get: operations['get_professor']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/professors/{professor_key}/reviews': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** List Professor Reviews */
+    get: operations['list_professor_reviews']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/terms': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** V1 Terms */
+    get: operations['v1_terms']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/departments': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** V1 Departments */
+    get: operations['v1_departments']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/core-areas': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** V1 Core Areas */
+    get: operations['v1_core_areas']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/catalog': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * V1 Catalog
+     * @description Every section of one term, the same as catalog-<term>.json.
+     */
+    get: operations['v1_catalog']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/courses/{course_key}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** V1 Course */
+    get: operations['v1_course']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/api/v1/professors/{professor_key}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /** V1 Professor */
+    get: operations['v1_professor']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
 }
 export type webhooks = Record<string, never>
 export interface components {
   schemas: {
+    /** CoreArea */
+    CoreArea: {
+      /** Code */
+      code: string
+      /** Name */
+      name: string
+    }
+    /** CourseDetail */
+    CourseDetail: {
+      /** Key */
+      key: string
+      dept: components['schemas']['DepartmentRef']
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Full Title */
+      full_title: string
+      /** Is Topic */
+      is_topic: boolean
+      /** Units */
+      units: number | null
+      /** Description */
+      description: string | null
+      /** Description History */
+      description_history: components['schemas']['DescriptionVersion'][]
+      /** Restrictions */
+      restrictions: string[]
+      /** Prerequisites */
+      prerequisites: components['schemas']['Prerequisite'][]
+      /** Corequisites */
+      corequisites: string | null
+      /** Repeatable */
+      repeatable: boolean
+      /** Numbers */
+      numbers: components['schemas']['CourseNumber'][]
+      /** Terms */
+      terms: components['schemas']['TermRef'][]
+      /** Professors */
+      professors: components['schemas']['CourseProfessor'][]
+      /** Related */
+      related: components['schemas']['RelatedCourseOut'][]
+      /** Cross Listed */
+      cross_listed: components['schemas']['CrossListedCourse'][]
+      summary: components['schemas']['RatingSummary']
+    }
+    /**
+     * CourseIndexItem
+     * @description One course in the full list behind the type-to-match pickers (matched in the browser).
+     */
+    CourseIndexItem: {
+      /** Key */
+      key: string
+      /** Dept */
+      dept: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Former Numbers */
+      former_numbers: string[]
+    }
+    /** CourseListItem */
+    CourseListItem: {
+      /** Key */
+      key: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Is Topic */
+      is_topic: boolean
+      last_term: components['schemas']['TermRef'] | null
+      /** Review Count */
+      review_count: number
+      /** Avg Overall */
+      avg_overall: number | null
+    }
+    /** CourseNumber */
+    CourseNumber: {
+      /** Number */
+      number: string
+      /** Terms */
+      terms: string[]
+    }
+    /**
+     * CourseProfessor
+     * @description Someone who taught a section of the course (lecture or lab), with the terms.
+     */
+    CourseProfessor: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+      /** Terms */
+      terms: components['schemas']['TermRef'][]
+    }
+    /**
+     * CrossListedCourse
+     * @description A course in another department listing the same class; its reviews are shared.
+     */
+    CrossListedCourse: {
+      /** Key */
+      key: string
+      /** Dept */
+      dept: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Terms */
+      terms: components['schemas']['TermRef'][]
+    }
+    /** DepartmentOut */
+    DepartmentOut: {
+      /** Code */
+      code: string
+      /** Name */
+      name: string
+      /** Course Count */
+      course_count: number
+      /** Professor Count */
+      professor_count: number
+    }
+    /** DepartmentRef */
+    DepartmentRef: {
+      /** Code */
+      code: string
+      /** Name */
+      name: string
+    }
+    /** DescriptionVersion */
+    DescriptionVersion: {
+      /** From Term */
+      from_term: string
+      /** To Term */
+      to_term: string
+      /** Text */
+      text: string
+    }
+    /**
+     * EmphasisCounts
+     * @description How many reviews chose each grading emphasis (a review may choose several).
+     */
+    EmphasisCounts: {
+      /** Exam */
+      exam: number
+      /** Participation */
+      participation: number
+      /** Paper */
+      paper: number
+      /** Presentation */
+      presentation: number
+      /** Project */
+      project: number
+    }
+    /** ExportCourse */
+    ExportCourse: {
+      /** Key */
+      key: string
+      /** Dept */
+      dept: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Full Title */
+      full_title: string
+      /** Title Variants */
+      title_variants: string[]
+      /** Numbers */
+      numbers: components['schemas']['CourseNumber'][]
+      /** Is Topic */
+      is_topic: boolean
+      /** Units */
+      units: number | null
+      /** Description */
+      description: string | null
+      /** Description History */
+      description_history: components['schemas']['DescriptionVersion'][]
+      /** Restrictions */
+      restrictions: string[]
+      /** Prerequisites */
+      prerequisites: components['schemas']['Prerequisite'][]
+      /** Corequisites */
+      corequisites: string | null
+      /** Repeatable */
+      repeatable: boolean
+      /** Related */
+      related: components['schemas']['RelatedCourse'][]
+    }
+    /** ExportDepartment */
+    ExportDepartment: {
+      /** Code */
+      code: string
+      /** Name */
+      name: string
+    }
+    /** ExportProfessor */
+    ExportProfessor: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+      /** First Name */
+      first_name: string
+      /** Last Name */
+      last_name: string
+      /** Departments */
+      departments: string[]
+    }
+    /** ExportSection */
+    ExportSection: {
+      /** Term */
+      term: string
+      /** Crn */
+      crn: string
+      /** Code */
+      code: string
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: 'lecture' | 'lab'
+      /** Section */
+      section: string
+      /** Lab Section */
+      lab_section: string | null
+      /** Parent Crn */
+      parent_crn: string | null
+      /** Title */
+      title: string
+      /** Units */
+      units: number | null
+      /** Meetings */
+      meetings: components['schemas']['Meeting'][]
+      /** Core */
+      core: components['schemas']['CoreArea'][]
+      /** Seats Max */
+      seats_max: number | null
+      /** Cross List Group */
+      cross_list_group: string | null
+      /** Professors */
+      professors: components['schemas']['ProfessorRef'][]
+      course: components['schemas']['SectionCourse']
+    }
+    /** ExportTerm */
+    ExportTerm: {
+      /** Code */
+      code: string
+      /** Label */
+      label: string
+      /** Year */
+      year: number
+      /**
+       * Season
+       * @enum {string}
+       */
+      season: 'fall' | 'spring' | 'summer'
+      /** Academic Year */
+      academic_year: string
+    }
+    /** HTTPValidationError */
+    HTTPValidationError: {
+      /** Detail */
+      detail?: components['schemas']['ValidationError'][]
+    }
     /** HealthOut */
     HealthOut: {
       /**
@@ -37,6 +562,265 @@ export interface components {
        * @enum {string}
        */
       db: 'ok' | 'error'
+    }
+    /** Meeting */
+    Meeting: {
+      /** Time */
+      time: string
+      /** Days */
+      days: string
+    }
+    /**
+     * Prerequisite
+     * @description One row of the site's prerequisite table, as listed ("or MATH 210" keeps its "or").
+     */
+    Prerequisite: {
+      /** Course */
+      course: string
+      /** Min Grade */
+      min_grade: string
+      /** Concurrent */
+      concurrent: string
+      /** Level */
+      level: string
+    }
+    /** ProfessorCourse */
+    ProfessorCourse: {
+      /** Key */
+      key: string
+      /** Dept */
+      dept: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Terms */
+      terms: components['schemas']['TermRef'][]
+    }
+    /** ProfessorDetail */
+    ProfessorDetail: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+      /** First Name */
+      first_name: string
+      /** Last Name */
+      last_name: string
+      /** Departments */
+      departments: components['schemas']['DepartmentRef'][]
+      /** Courses */
+      courses: components['schemas']['ProfessorCourse'][]
+      summary: components['schemas']['RatingSummary']
+    }
+    /**
+     * ProfessorIndexItem
+     * @description One professor in the full list behind the type-to-match pickers.
+     */
+    ProfessorIndexItem: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+      /** Departments */
+      departments: string[]
+    }
+    /** ProfessorListItem */
+    ProfessorListItem: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+      /** Review Count */
+      review_count: number
+      /** Avg Overall */
+      avg_overall: number | null
+    }
+    /** ProfessorRef */
+    ProfessorRef: {
+      /** Key */
+      key: string
+      /** Display Name */
+      display_name: string
+    }
+    /**
+     * RatingSummary
+     * @description Averages over a set of reviews. A review about a lecture and its lab counts once.
+     *     With no reviews, count is 0 and every average and percentage is null.
+     */
+    RatingSummary: {
+      /** Count */
+      count: number
+      /** Avg Overall */
+      avg_overall: number | null
+      /** Avg Difficulty */
+      avg_difficulty: number | null
+      /** Avg Workload */
+      avg_workload: number | null
+      /** Take Course Again Pct */
+      take_course_again_pct: number | null
+      /** Take Prof Again Pct */
+      take_prof_again_pct: number | null
+      emphasis_counts: components['schemas']['EmphasisCounts']
+    }
+    /** RelatedCourse */
+    RelatedCourse: {
+      /** Key */
+      key: string
+      /**
+       * Relation
+       * @enum {string}
+       */
+      relation: 'formerly' | 'now' | 'see_also'
+    }
+    /** RelatedCourseOut */
+    RelatedCourseOut: {
+      /** Key */
+      key: string
+      /** Title */
+      title: string
+      /**
+       * Relation
+       * @enum {string}
+       */
+      relation: 'formerly' | 'now' | 'see_also'
+    }
+    /** ReviewOut */
+    ReviewOut: {
+      /** Id */
+      id: number
+      /** Overall */
+      overall: number
+      /** Take Course Again */
+      take_course_again: boolean
+      /** Take Prof Again */
+      take_prof_again: boolean
+      /** Difficulty */
+      difficulty: number
+      /** Workload */
+      workload: number
+      /** Emphasis */
+      emphasis: ('exam' | 'participation' | 'paper' | 'presentation' | 'project')[]
+      /** Comment */
+      comment: string | null
+      /**
+       * Created On
+       * Format: date
+       */
+      created_on: string
+      /**
+       * Updated On
+       * Format: date
+       */
+      updated_on: string
+      /** Targets */
+      targets: components['schemas']['ReviewTargetOut'][]
+    }
+    /**
+     * ReviewPage
+     * @description One page of reviews, newest first. `summary` covers every review matching the filters,
+     *     not just this page.
+     */
+    ReviewPage: {
+      /** Total */
+      total: number
+      /** Limit */
+      limit: number
+      /** Offset */
+      offset: number
+      summary: components['schemas']['RatingSummary']
+      /** Items */
+      items: components['schemas']['ReviewOut'][]
+    }
+    /**
+     * ReviewTargetOut
+     * @description One (section, professor) pair the review is about.
+     */
+    ReviewTargetOut: {
+      /** Term */
+      term: string
+      /** Term Label */
+      term_label: string
+      /** Crn */
+      crn: string
+      /** Code */
+      code: string
+      /**
+       * Kind
+       * @enum {string}
+       */
+      kind: 'lecture' | 'lab'
+      /** Course Key */
+      course_key: string
+      /** Course Title */
+      course_title: string
+      /** Professor Key */
+      professor_key: string
+      /** Professor Name */
+      professor_name: string
+    }
+    /** SectionCourse */
+    SectionCourse: {
+      /** Key */
+      key: string
+      /** Dept */
+      dept: string
+      /** Number */
+      number: string
+      /** Title */
+      title: string
+      /** Full Title */
+      full_title: string
+      /** Is Topic */
+      is_topic: boolean
+      /** Units */
+      units: number | null
+      /** Description */
+      description: string | null
+      /** Restrictions */
+      restrictions: string[]
+      /** Prerequisites */
+      prerequisites: components['schemas']['Prerequisite'][]
+      /** Corequisites */
+      corequisites: string | null
+      /** Repeatable */
+      repeatable: boolean
+    }
+    /** TermCatalog */
+    TermCatalog: {
+      /**
+       * Schema Version
+       * @default 1
+       */
+      schema_version: number
+      /**
+       * Generated At
+       * Format: date-time
+       */
+      generated_at: string
+      term: components['schemas']['ExportTerm']
+      /** Sections */
+      sections: components['schemas']['ExportSection'][]
+    }
+    /** TermRef */
+    TermRef: {
+      /** Code */
+      code: string
+      /** Label */
+      label: string
+    }
+    /** ValidationError */
+    ValidationError: {
+      /** Location */
+      loc: (string | number)[]
+      /** Message */
+      msg: string
+      /** Error Type */
+      type: string
+      /** Input */
+      input?: unknown
+      /** Context */
+      ctx?: Record<string, never>
     }
   }
   responses: never
@@ -63,6 +847,525 @@ export interface operations {
         }
         content: {
           'application/json': components['schemas']['HealthOut']
+        }
+      }
+    }
+  }
+  list_departments: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['DepartmentOut'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_courses: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CourseIndexItem'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_professors: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessorIndexItem'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  list_department_courses: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        code: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CourseListItem'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_department_professors: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        code: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessorListItem'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_course: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        course_key: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CourseDetail']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_course_reviews: {
+    parameters: {
+      query?: {
+        /** @description Professor key */
+        professor?: string | null
+        /** @description Term code, e.g. "202602" */
+        term?: string | null
+        limit?: number
+        offset?: number
+      }
+      header?: never
+      path: {
+        course_key: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReviewPage']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  get_professor: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        professor_key: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ProfessorDetail']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  list_professor_reviews: {
+    parameters: {
+      query?: {
+        /** @description Course key */
+        course?: string | null
+        /** @description Term code, e.g. "202602" */
+        term?: string | null
+        limit?: number
+        offset?: number
+      }
+      header?: never
+      path: {
+        professor_key: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ReviewPage']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  v1_terms: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExportTerm'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  v1_departments: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExportDepartment'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  v1_core_areas: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['CoreArea'][]
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+    }
+  }
+  v1_catalog: {
+    parameters: {
+      query: {
+        /** @description Term code, e.g. "202702" */
+        term: string
+      }
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TermCatalog']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  v1_course: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        course_key: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExportCourse']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
+        }
+      }
+    }
+  }
+  v1_professor: {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        professor_key: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Successful Response */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['ExportProfessor']
+        }
+      }
+      /** @description Not found */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content?: never
+      }
+      /** @description Validation Error */
+      422: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['HTTPValidationError']
         }
       }
     }

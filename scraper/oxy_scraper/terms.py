@@ -3,12 +3,19 @@
 202601 = 2025 Fall, 202602 = 2026 Spring, 202603 = 2026 Summer. Codes sort by time.
 """
 
-from datetime import date
 from typing import Any
 
-SEASONS = {"01": "fall", "02": "spring", "03": "summer"}
-# First month of each season in the calendar year it runs in (fall runs in year YYYY - 1).
-SEASON_START_MONTH = {"spring": 1, "summer": 6, "fall": 8}
+# The season table and the current-term rule live in the backend (reviews need them too).
+from app.services.terms import SEASON_START_MONTH, SEASONS, current_term
+
+__all__ = [
+    "SEASONS",
+    "SEASON_START_MONTH",
+    "academic_year",
+    "current_term",
+    "season_of",
+    "term_info",
+]
 
 
 def season_of(code: str) -> str:
@@ -37,14 +44,3 @@ def term_info(code: str) -> dict[str, Any]:
 def academic_year(code: str) -> int:
     """Year the academic year of `code` ends: 202701 (2026 Fall) and 202702 -> 2027."""
     return int(code[:4])
-
-
-def current_term(today: date) -> str:
-    """Code of the term running (or about to start) on `today`."""
-    started = [
-        (month, season) for season, month in SEASON_START_MONTH.items() if month <= today.month
-    ]
-    season = max(started)[1]
-    end = today.year + 1 if season == "fall" else today.year
-    code = next(c for c, s in SEASONS.items() if s == season)
-    return f"{end}{code}"
