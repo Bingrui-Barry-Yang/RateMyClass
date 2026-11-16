@@ -47,7 +47,9 @@ backend/app/
 │   ├── catalog.py    Lookups by natural key, department/course/professor pages
 │   ├── reviews.py    Review filters (cross-list aware), summaries, review counts
 │   ├── errors.py     NotFoundError, turned into a 404 by main.py
+│   ├── terms.py      Term seasons, current term, has_started (also used by the scraper)
 │   └── catalog_export.py  Queries for the public catalog format
+├── dev/seed_reviews.py  Fake reviews for local development (make seed-reviews / clear-reviews)
 ├── models/           SQLAlchemy models (import each module in models/__init__.py)
 │   ├── catalog.py    departments, terms, courses, sections, professors, section_professors
 │   └── review.py     reviews, review_targets (anonymous: no user or email columns)
@@ -105,6 +107,19 @@ the import will refuse to delete a section that has reviews and report it for a 
 (Stage 5). A professor who has reviews cannot be deleted (`RESTRICT`), so an import that would
 remove one fails and a person decides; account tables come with login (Stage 4) and lockouts
 with review submission (Stage 5).
+
+Terms that have started (`services/terms.py` `has_started`: the current term, by the date, and
+earlier ones) are the only ones reviews may be about. The scraper uses the same module for its
+current term.
+
+Fake reviews for development (`app/dev/seed_reviews.py`): `make seed-reviews [count=400]` writes
+reviews on real sections and professors of started terms (lecture alone, lecture + lab, lab
+alone, each professor of a co-taught section, cross-listed sections; a few featured courses get
+many). A fixed random seed gives the same reviews every time. It refuses if reviews exist;
+`make clear-reviews` deletes all of them. Fake reviews can never pass for real ones: every comment
+starts with `[Fake review for development]`, and both commands refuse unless the database is on
+this machine (`localhost`) and `APP_ENV` is not `production`, so they can neither add fake
+reviews to nor delete real ones from a server database.
 
 ### Read-only API
 

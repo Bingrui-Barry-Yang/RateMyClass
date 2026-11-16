@@ -78,6 +78,20 @@ in place. It stops if a term would lose more than 20% of its sections (usually a
 | `data/export` | Public catalog JSON for other projects ([docs/catalog-export.md](docs/catalog-export.md)), written by `make import` / `make export` |
 | `data/reports` | CSV reports for review (topic splits, title changes, renumbered courses, possible duplicate professors, unmatched labs, overrides that no longer match anything, and full tables of all sections and courses); `data/reports/update/<time>/` holds what each import changed |
 
+### Fake reviews for development
+
+There are no real reviews until writing reviews is built. To see the review pages with data:
+
+```bash
+make seed-reviews    # adds about 400 fake reviews on terms that have started (count=… to change)
+make clear-reviews   # deletes every review
+```
+
+The same seed always gives the same reviews. Every fake comment starts with
+`[Fake review for development]`. `seed-reviews` refuses if there are reviews already, and both
+commands refuse unless the database is on this machine (`localhost`) and `APP_ENV` is not
+`production`.
+
 Corrections are made by hand in the committed CSV files in `scraper/overrides/`, never in the database:
 `exclusions.csv` (what to skip), `course_overrides.csv` (topic names, merges, titles, numbers reused for
 different courses, courses to keep apart or to link as "formerly") and `professor_aliases.csv` (one
@@ -106,6 +120,7 @@ Run `make help` for the full list.
 | `make normalize` | Group parsed data into courses, sections and professors (`data/normalized`) and write review reports (`data/reports`) |
 | `make import` | Normalize, then make the database match it and write a change report to `data/reports/update` (`force=1`), then export. Needs `make db-up migrate` and `make scrape` first |
 | `make export` | Write the public catalog JSON from the database to `data/export` ([docs/catalog-export.md](docs/catalog-export.md)) |
+| `make seed-reviews` / `make clear-reviews` | Add fake reviews for development (`count=…`) / delete every review; local database only, refused in production |
 
 ## Dependencies
 
